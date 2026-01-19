@@ -1,0 +1,5 @@
+{
+  "name": "ASK E99 - Gaming News AI",
+  "description": "An AI-powered gaming news aggregator that provides the latest updates on games and hardware using Google Search grounding.",
+  "requestFramePermissions": []
+}
