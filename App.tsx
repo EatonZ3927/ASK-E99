@@ -245,14 +245,14 @@ const App: React.FC = () => {
             <div className="fixed bottom-0 left-0 right-0 p-4 bg-gradient-to-t from-gray-50 via-gray-50/95 to-transparent flex justify-center z-20">
               <div className="w-full max-w-2xl relative">
                 <div className="bg-white rounded-2xl shadow-2xl border border-red-100 p-3 flex items-end gap-3 group transition-all focus-within:ring-2 focus-within:ring-red-100">
-                  <div className="pb-4 pl-3 text-red-500 text-lg">
+                  <div className="self-start pt-4 pl-3 text-red-500 text-lg">
                     <i className="fa-solid fa-lightbulb"></i>
                   </div>
                   <textarea 
                     ref={followUpInputRef}
-                    rows={1}
+                    rows={3}
                     placeholder="针对此答案进行深度追问..." 
-                    className="flex-1 py-4 bg-transparent outline-none text-gray-700 placeholder-gray-400 text-lg resize-none min-h-[60px] max-h-[200px]"
+                    className="flex-1 py-4 bg-transparent outline-none text-gray-700 placeholder-gray-400 text-lg resize-none min-h-[100px] max-h-[300px]"
                     value={followUpQuery}
                     onChange={(e) => setFollowUpQuery(e.target.value)}
                     onKeyDown={(e) => {
