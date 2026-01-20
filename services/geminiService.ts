@@ -1,10 +1,24 @@
 
 import { GoogleGenAI } from "@google/genai";
-import { SearchResult, GroundingChunk } from "../types";
+import { SearchResult, GroundingChunk, ChatMessage, SearchSource } from "../types";
 
-// Search for gaming news using Gemini API with Google Search grounding
+const extractSources = (candidates: any[] | undefined): SearchSource[] => {
+  const rawChunks = candidates?.[0]?.groundingMetadata?.groundingChunks || [];
+  const chunks = rawChunks as GroundingChunk[];
+  
+  const sources = chunks
+    .filter((chunk): chunk is { web: { title: string; uri: string } } => 
+      Boolean(chunk.web && chunk.web.title && chunk.web.uri)
+    )
+    .map(chunk => ({
+      title: chunk.web.title,
+      url: chunk.web.uri
+    }));
+
+  return Array.from(new Map(sources.map(item => [item.url, item])).values());
+};
+
 export const searchGamingNews = async (query: string): Promise<SearchResult> => {
-  // Initialize AI client using the direct process.env.API_KEY as per guidelines
   const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
   
   try {
@@ -17,25 +31,8 @@ export const searchGamingNews = async (query: string): Promise<SearchResult> => 
       },
     });
 
-    // Access the generated text content directly via the .text property
     const text = response.text || "抱歉，我暂时无法获取相关资讯。";
-    
-    // Safely extract grounding chunks and cast to GroundingChunk[] to avoid 'unknown' type errors
-    const rawChunks = response.candidates?.[0]?.groundingMetadata?.groundingChunks || [];
-    const chunks = rawChunks as GroundingChunk[];
-    
-    // Process chunks to extract source titles and URLs with a type guard to filter only valid web results
-    const sources: { title: string; url: string }[] = chunks
-      .filter((chunk): chunk is { web: { title: string; uri: string } } => 
-        Boolean(chunk.web && chunk.web.title && chunk.web.uri)
-      )
-      .map(chunk => ({
-        title: chunk.web.title,
-        url: chunk.web.uri
-      }));
-
-    // Deduplicate sources by URL to ensure the final list contains unique entries
-    const uniqueSources = Array.from(new Map(sources.map(item => [item.url, item])).values());
+    const uniqueSources = extractSources(response.candidates);
 
     return {
       text,
@@ -43,6 +40,43 @@ export const searchGamingNews = async (query: string): Promise<SearchResult> => 
     };
   } catch (error) {
     console.error("Gemini Search Error:", error);
+    throw error;
+  }
+};
+
+export const continueDeepThinking = async (
+  history: ChatMessage[], 
+  newQuery: string
+): Promise<ChatMessage> => {
+  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+  
+  // Format history for the chat API
+  // Note: The first message in history is the initial model response.
+  // We need to provide the context correctly.
+  const chat = ai.chats.create({
+    model: 'gemini-3-flash-preview',
+    config: {
+      systemInstruction: '你是一个专业的游戏资讯专家 E99。现在请基于之前的讨论，对用户的新问题进行更深度的分析和回答。如果需要，请使用搜索工具获取最新信息。',
+      tools: [{ googleSearch: {} }],
+    },
+    history: history.map(msg => ({
+      role: msg.role,
+      parts: [{ text: msg.text }]
+    }))
+  });
+
+  try {
+    const response = await chat.sendMessage({ message: newQuery });
+    const text = response.text || "深度思考中遇到了点小问题。";
+    const uniqueSources = extractSources(response.candidates);
+
+    return {
+      role: 'model',
+      text,
+      sources: uniqueSources
+    };
+  } catch (error) {
+    console.error("Deep Thinking Error:", error);
     throw error;
   }
 };
