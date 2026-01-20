@@ -2,7 +2,7 @@
 import React, { useState, useCallback, useRef, useEffect } from 'react';
 import Logo from './components/Logo';
 import { searchGamingNews, continueDeepThinking } from './services/geminiService';
-import { AppState, SearchResult, ChatMessage } from './types';
+import { AppState, SearchResult, ChatMessage, NewsItem } from './types';
 
 const App: React.FC = () => {
   const [query, setQuery] = useState('');
@@ -10,6 +10,7 @@ const App: React.FC = () => {
   const [state, setState] = useState<AppState>(AppState.IDLE);
   const [history, setHistory] = useState<ChatMessage[]>([]);
   const [errorMsg, setErrorMsg] = useState('');
+  const [toast, setToast] = useState<string | null>(null);
   
   const scrollRef = useRef<HTMLDivElement>(null);
   const homeInputRef = useRef<HTMLTextAreaElement>(null);
@@ -37,6 +38,50 @@ const App: React.FC = () => {
     adjustHeight(followUpInputRef.current);
   }, [followUpQuery]);
 
+  useEffect(() => {
+    if (toast) {
+      const timer = setTimeout(() => setToast(null), 2000);
+      return () => clearTimeout(timer);
+    }
+  }, [toast]);
+
+  const showToast = (msg: string) => {
+    setToast(msg);
+  };
+
+  const handleShare = async (title: string, text: string) => {
+    const shareData = {
+      title: 'ASK E99 游戏资讯',
+      text: `${title}\n\n${text}\n\nVia ASK E99 AI`,
+    };
+
+    if (navigator.share) {
+      try {
+        await navigator.share(shareData);
+      } catch (err) {
+        // User cancelled or share failed, fallback to copy isn't usually needed if cancelled,
+        // but if it failed for other reasons, we could logs. 
+        // For 'AbortError', we do nothing.
+        if ((err as any).name !== 'AbortError') {
+             console.error('Share failed', err);
+        }
+      }
+    } else {
+      try {
+        await navigator.clipboard.writeText(shareData.text);
+        showToast('已复制到剪贴板');
+      } catch (err) {
+        showToast('复制失败');
+      }
+    }
+  };
+
+  const handleShareAll = (items: NewsItem[]) => {
+    const title = "E99 游戏资讯简报";
+    const text = items.map((item, idx) => `${idx + 1}. ${item.title}\n${item.description}`).join('\n\n');
+    handleShare(title, text);
+  };
+
   const handleSearch = useCallback(async (searchQuery?: string) => {
     const q = searchQuery || query;
     if (!q.trim()) return;
@@ -47,7 +92,7 @@ const App: React.FC = () => {
 
     try {
       const data = await searchGamingNews(q);
-      setHistory([{ role: 'model', text: data.text, sources: data.sources }]);
+      setHistory([{ role: 'model', text: data.text, items: data.items, sources: data.sources }]);
       setState(AppState.RESULT);
     } catch (err: any) {
       console.error(err);
@@ -89,6 +134,14 @@ const App: React.FC = () => {
 
   return (
     <div className="min-h-screen flex flex-col items-center p-4 relative overflow-x-hidden pt-12 md:pt-20">
+      {/* Toast Notification */}
+      {toast && (
+        <div className="fixed top-24 z-50 bg-gray-900 text-white px-6 py-3 rounded-full shadow-xl animate-fade-in flex items-center gap-2">
+          <i className="fa-solid fa-check-circle text-green-400"></i>
+          <span className="text-sm font-medium">{toast}</span>
+        </div>
+      )}
+
       {/* Background decoration elements */}
       <div className="fixed top-8 right-8 text-gray-100 pointer-events-none select-none">
         <i className="fa-solid fa-gamepad text-9xl transform rotate-12 opacity-10"></i>
@@ -175,9 +228,21 @@ const App: React.FC = () => {
                   : 'bg-white text-gray-700 border-gray-100 rounded-tl-none'
                 }`}>
                   {msg.role === 'model' && (
-                    <div className="flex items-center gap-2 mb-3 text-red-600 font-bold text-sm">
-                      <i className="fa-solid fa-robot"></i>
-                      <span>{index === 0 ? 'E99 简报' : 'E99 深度解析'}</span>
+                    <div className="flex items-center justify-between mb-4">
+                      <div className="flex items-center gap-2 text-red-600 font-bold text-sm">
+                        <i className="fa-solid fa-robot"></i>
+                        <span>{index === 0 ? 'E99 简报' : 'E99 深度解析'}</span>
+                      </div>
+                      {/* Global Share Button */}
+                      {msg.items && msg.items.length > 0 && (
+                        <button 
+                          onClick={() => handleShareAll(msg.items!)}
+                          className="flex items-center gap-1.5 text-xs bg-red-50 text-red-600 px-3 py-1.5 rounded-lg font-bold hover:bg-red-100 transition-colors"
+                        >
+                          <i className="fa-solid fa-share-nodes"></i>
+                          <span>分享全篇</span>
+                        </button>
+                      )}
                     </div>
                   )}
                   {msg.role === 'user' && (
@@ -186,9 +251,45 @@ const App: React.FC = () => {
                       <span>您的提问</span>
                     </div>
                   )}
-                  <div className="prose prose-sm max-w-none leading-relaxed whitespace-pre-wrap">
-                    {msg.text}
-                  </div>
+                  
+                  {/* Content Rendering: structured items or plain text */}
+                  {msg.items ? (
+                    <div className="grid gap-4">
+                      {msg.items.map((item, idx) => (
+                        <div key={idx} className="group bg-white p-5 rounded-2xl border border-red-100 shadow-sm hover:shadow-red-100 hover:border-red-200 transition-all relative">
+                          <div className="flex items-start gap-3">
+                            <span className="flex-shrink-0 w-6 h-6 rounded-full bg-red-100 text-red-600 flex items-center justify-center text-xs font-bold mt-0.5">
+                              {idx + 1}
+                            </span>
+                            <div className="flex-1 pr-8">
+                              <h3 className="font-bold text-gray-900 mb-2 group-hover:text-red-600 transition-colors">{item.title}</h3>
+                              <p className="text-gray-600 text-sm leading-relaxed">{item.description}</p>
+                            </div>
+                          </div>
+                          {/* Item Share Button */}
+                          <button 
+                            onClick={() => handleShare(item.title, item.description)}
+                            className="absolute top-4 right-4 w-8 h-8 flex items-center justify-center text-gray-300 hover:text-red-600 hover:bg-red-50 rounded-full transition-all opacity-0 group-hover:opacity-100 focus:opacity-100"
+                            title="分享此条"
+                          >
+                            <i className="fa-solid fa-share-nodes"></i>
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="prose prose-sm max-w-none leading-relaxed whitespace-pre-wrap relative group">
+                       {msg.text}
+                       {msg.role === 'model' && (
+                         <button 
+                           onClick={() => handleShare('E99 深度解析', msg.text || '')}
+                           className="absolute top-0 right-0 w-8 h-8 flex items-center justify-center text-gray-300 hover:text-red-600 hover:bg-red-50 rounded-full transition-all opacity-0 group-hover:opacity-100"
+                         >
+                            <i className="fa-solid fa-share-nodes"></i>
+                         </button>
+                       )}
+                    </div>
+                  )}
                   
                   {msg.sources && msg.sources.length > 0 && (
                     <div className={`mt-6 pt-4 border-t ${msg.role === 'user' ? 'border-red-500' : 'border-gray-50'}`}>
