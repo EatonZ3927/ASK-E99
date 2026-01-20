@@ -11,14 +11,21 @@ export interface SearchSource {
   url: string;
 }
 
+export interface NewsItem {
+  title: string;
+  description: string;
+}
+
 export interface SearchResult {
-  text: string;
+  text?: string;
+  items?: NewsItem[];
   sources: SearchSource[];
 }
 
 export interface ChatMessage {
   role: 'user' | 'model';
-  text: string;
+  text?: string;
+  items?: NewsItem[];
   sources?: SearchSource[];
 }
 

@@ -1,6 +1,6 @@
 
-import { GoogleGenAI } from "@google/genai";
-import { SearchResult, GroundingChunk, ChatMessage, SearchSource } from "../types";
+import { GoogleGenAI, Type } from "@google/genai";
+import { SearchResult, GroundingChunk, ChatMessage, SearchSource, NewsItem } from "../types";
 
 const extractSources = (candidates: any[] | undefined): SearchSource[] => {
   const rawChunks = candidates?.[0]?.groundingMetadata?.groundingChunks || [];
@@ -24,18 +24,34 @@ export const searchGamingNews = async (query: string): Promise<SearchResult> => 
   try {
     const response = await ai.models.generateContent({
       model: "gemini-3-flash-preview",
-      contents: `你是一个专业的游戏资讯专家 E99。请针对以下问题提供最新、最准确的游戏新闻总结：${query}`,
+      contents: `你是一个专业的游戏资讯专家 E99。请针对以下问题提供最新、最准确的游戏新闻总结。请将回答拆分为多个独立的资讯条目，每个条目包含标题和详细描述：${query}`,
       config: {
         tools: [{ googleSearch: {} }],
         temperature: 0.7,
+        responseMimeType: "application/json",
+        responseSchema: {
+          type: Type.ARRAY,
+          items: {
+            type: Type.OBJECT,
+            properties: {
+              title: { type: Type.STRING },
+              description: { type: Type.STRING }
+            },
+            required: ["title", "description"]
+          }
+        }
       },
     });
 
-    const text = response.text || "抱歉，我暂时无法获取相关资讯。";
+    const items = JSON.parse(response.text || "[]") as NewsItem[];
     const uniqueSources = extractSources(response.candidates);
+    
+    // Create a text fallback for history context
+    const textFallback = items.map(i => `### ${i.title}\n${i.description}`).join('\n\n');
 
     return {
-      text,
+      text: textFallback,
+      items: items,
       sources: uniqueSources
     };
   } catch (error) {
@@ -51,18 +67,28 @@ export const continueDeepThinking = async (
   const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
   
   // Format history for the chat API
-  // Note: The first message in history is the initial model response.
-  // We need to provide the context correctly.
+  // Convert structured items back to text for context if needed
+  const historyForModel = history.map(msg => {
+    let textContent = msg.text || "";
+    if (msg.items && msg.items.length > 0 && !textContent) {
+        textContent = msg.items.map(i => `Title: ${i.title}\nContent: ${i.description}`).join('\n\n');
+    }
+    // Ensure text is not empty
+    if (!textContent.trim()) textContent = " ";
+
+    return {
+      role: msg.role,
+      parts: [{ text: textContent }]
+    };
+  });
+
   const chat = ai.chats.create({
     model: 'gemini-3-flash-preview',
     config: {
       systemInstruction: '你是一个专业的游戏资讯专家 E99。现在请基于之前的讨论，对用户的新问题进行更深度的分析和回答。如果需要，请使用搜索工具获取最新信息。',
       tools: [{ googleSearch: {} }],
     },
-    history: history.map(msg => ({
-      role: msg.role,
-      parts: [{ text: msg.text }]
-    }))
+    history: historyForModel
   });
 
   try {
