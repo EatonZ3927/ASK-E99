@@ -130,6 +130,15 @@ const App: React.FC = () => {
     setFollowUpQuery('');
   };
 
+  const getSourceIcon = (url: string) => {
+    const lowerUrl = url.toLowerCase();
+    if (lowerUrl.includes('reddit.com')) return 'fa-brands fa-reddit text-[#FF4500]';
+    if (lowerUrl.includes('twitter.com') || lowerUrl.includes('x.com')) return 'fa-brands fa-x-twitter';
+    if (lowerUrl.includes('youtube.com')) return 'fa-brands fa-youtube text-[#FF0000]';
+    if (lowerUrl.includes('steampowered.com')) return 'fa-brands fa-steam';
+    return 'fa-solid fa-link';
+  };
+
   const hotSearches = ['PS5 Pro', '怪物猎人荒野', 'Switch 2 传闻'];
 
   return (
@@ -252,16 +261,16 @@ const App: React.FC = () => {
                     </div>
                   )}
                   
-                  {/* Content Rendering: structured items or plain text */}
+                  {/* Content Rendering: structured items (Masonry-like columns) or plain text */}
                   {msg.items ? (
-                    <div className="grid gap-4">
+                    <div className="columns-1 gap-4 space-y-4">
                       {msg.items.map((item, idx) => (
-                        <div key={idx} className="group bg-white p-5 rounded-2xl border border-red-100 shadow-sm hover:shadow-red-100 hover:border-red-200 transition-all relative">
+                        <div key={idx} className="break-inside-avoid group bg-white p-5 rounded-2xl border border-red-100 shadow-sm hover:shadow-red-100 hover:border-red-200 transition-all relative mb-4">
                           <div className="flex items-start gap-3">
                             <span className="flex-shrink-0 w-6 h-6 rounded-full bg-red-100 text-red-600 flex items-center justify-center text-xs font-bold mt-0.5">
                               {idx + 1}
                             </span>
-                            <div className="flex-1 pr-8">
+                            <div className="flex-1 pr-6">
                               <h3 className="font-bold text-gray-900 mb-2 group-hover:text-red-600 transition-colors">{item.title}</h3>
                               <p className="text-gray-600 text-sm leading-relaxed">{item.description}</p>
                             </div>
@@ -301,14 +310,14 @@ const App: React.FC = () => {
                             href={s.url} 
                             target="_blank" 
                             rel="noopener noreferrer"
-                            className={`text-xs px-3 py-1.5 rounded-lg border transition-all truncate max-w-[200px] ${
+                            className={`flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg border transition-all truncate max-w-[200px] ${
                               msg.role === 'user' 
                               ? 'bg-red-700 border-red-500 text-white hover:bg-red-800' 
                               : 'bg-gray-50 border-gray-100 text-gray-600 hover:bg-red-50 hover:text-red-600 hover:border-red-100'
                             }`}
                           >
-                            <i className="fa-solid fa-link mr-1 opacity-70"></i>
-                            {s.title}
+                            <i className={`${getSourceIcon(s.url)} text-xs opacity-80`}></i>
+                            <span className="truncate">{s.title}</span>
                           </a>
                         ))}
                       </div>
