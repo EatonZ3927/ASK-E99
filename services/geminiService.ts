@@ -24,7 +24,14 @@ export const searchGamingNews = async (query: string): Promise<SearchResult> => 
   try {
     const response = await ai.models.generateContent({
       model: "gemini-3-flash-preview",
-      contents: `你是一个专业的游戏资讯专家 E99。请针对以下问题提供最新、最准确的游戏新闻总结。请将回答拆分为多个独立的资讯条目，每个条目包含标题和详细描述：${query}`,
+      contents: `你是一个专业的游戏资讯专家 E99。请针对以下问题提供最新、最准确的游戏新闻总结。
+      
+      重要要求：
+      1. 请广泛搜索权威游戏媒体。
+      2. 必须包含 reddit.com (如 r/Games, r/GamingLeaksAndRumours) 上的玩家热门讨论、爆料或真实反馈。
+      3. 请将回答拆分为多个独立的资讯条目，每个条目包含标题和详细描述。
+      
+      用户问题：${query}`,
       config: {
         tools: [{ googleSearch: {} }],
         temperature: 0.7,
@@ -85,7 +92,7 @@ export const continueDeepThinking = async (
   const chat = ai.chats.create({
     model: 'gemini-3-flash-preview',
     config: {
-      systemInstruction: '你是一个专业的游戏资讯专家 E99。现在请基于之前的讨论，对用户的新问题进行更深度的分析和回答。如果需要，请使用搜索工具获取最新信息。',
+      systemInstruction: '你是一个专业的游戏资讯专家 E99。现在请基于之前的讨论，对用户的新问题进行更深度的分析和回答。请特别关注 reddit.com 上的相关讨论。如果需要，请使用搜索工具获取最新信息。',
       tools: [{ googleSearch: {} }],
     },
     history: historyForModel
