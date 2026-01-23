@@ -127,3 +127,43 @@ export const continueDeepThinking = async (
     throw error;
   }
 };
+
+// --- WeChat Mini Program Bridge Interface ---
+
+interface E99Response<T> {
+  code: number;
+  data: T | null;
+  msg: string;
+}
+
+declare global {
+  interface Window {
+    E99MiniProgramBridge: {
+      search: (query: string) => Promise<E99Response<SearchResult>>;
+      deepThink: (history: ChatMessage[], newQuery: string) => Promise<E99Response<ChatMessage>>;
+    };
+  }
+}
+
+// Expose functions to window for WebView usage
+if (typeof window !== 'undefined') {
+  window.E99MiniProgramBridge = {
+    search: async (query: string) => {
+      try {
+        const result = await searchGamingNews(query);
+        return { code: 0, data: result, msg: 'success' };
+      } catch (e: any) {
+        return { code: -1, data: null, msg: e.message || 'Unknown error' };
+      }
+    },
+    deepThink: async (history: ChatMessage[], newQuery: string) => {
+      try {
+        const result = await continueDeepThinking(history, newQuery);
+        return { code: 0, data: result, msg: 'success' };
+      } catch (e: any) {
+        return { code: -1, data: null, msg: e.message || 'Unknown error' };
+      }
+    }
+  };
+  console.log('[E99 Bridge] Ready. Accessible via window.E99MiniProgramBridge');
+}
