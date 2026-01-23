@@ -59,9 +59,6 @@ const App: React.FC = () => {
       try {
         await navigator.share(shareData);
       } catch (err) {
-        // User cancelled or share failed, fallback to copy isn't usually needed if cancelled,
-        // but if it failed for other reasons, we could logs. 
-        // For 'AbortError', we do nothing.
         if ((err as any).name !== 'AbortError') {
              console.error('Share failed', err);
         }
@@ -195,7 +192,7 @@ const App: React.FC = () => {
                 className="w-full py-5 bg-red-600 text-white font-bold rounded-2xl shadow-lg shadow-red-200 hover:bg-red-700 active:scale-95 transition-all disabled:opacity-50 flex items-center justify-center gap-3 text-lg"
               >
                 {state === AppState.LOADING ? (
-                  <><i className="fa-solid fa-circle-notch animate-spin"></i> 正在收集资讯...</>
+                  <><i className="fa-solid fa-circle-notch animate-spin"></i> 正在深度搜索...</>
                 ) : (
                   '开启深度搜索'
                 )}
@@ -225,7 +222,7 @@ const App: React.FC = () => {
           <div className="w-full space-y-6 animate-fade-in-up pb-56">
             <div className="flex justify-center items-center mb-4 px-2">
                <div className="flex items-center gap-2">
-                  <span className="text-xs font-bold text-red-600 bg-red-50 px-3 py-1 rounded-full uppercase tracking-wider">Live AI Analysis</span>
+                  <span className="text-xs font-bold text-red-600 bg-red-50 px-3 py-1 rounded-full uppercase tracking-wider">Live Reddit Analysis</span>
                </div>
             </div>
 
@@ -237,10 +234,10 @@ const App: React.FC = () => {
                   : 'bg-white text-gray-700 border-gray-100 rounded-tl-none'
                 }`}>
                   {msg.role === 'model' && (
-                    <div className="flex items-center justify-between mb-4">
+                    <div className="flex items-center justify-between mb-6 pb-4 border-b border-gray-100">
                       <div className="flex items-center gap-2 text-red-600 font-bold text-sm">
                         <i className="fa-solid fa-robot"></i>
-                        <span>{index === 0 ? 'E99 简报' : 'E99 深度解析'}</span>
+                        <span>{index === 0 ? '您好，我是E99，这里是为你专属总结的游戏传闻' : 'E99 深度解析'}</span>
                       </div>
                       {/* Global Share Button */}
                       {msg.items && msg.items.length > 0 && (
@@ -261,24 +258,34 @@ const App: React.FC = () => {
                     </div>
                   )}
                   
-                  {/* Content Rendering: structured items (Masonry-like columns) or plain text */}
+                  {/* Content Rendering: Horizontal List Style */}
                   {msg.items ? (
-                    <div className="columns-1 gap-4 space-y-4">
+                    <div className="flex flex-col gap-3">
                       {msg.items.map((item, idx) => (
-                        <div key={idx} className="break-inside-avoid group bg-white p-5 rounded-2xl border border-red-100 shadow-sm hover:shadow-red-100 hover:border-red-200 transition-all relative mb-4">
-                          <div className="flex items-start gap-3">
-                            <span className="flex-shrink-0 w-6 h-6 rounded-full bg-red-100 text-red-600 flex items-center justify-center text-xs font-bold mt-0.5">
-                              {idx + 1}
-                            </span>
-                            <div className="flex-1 pr-6">
-                              <h3 className="font-bold text-gray-900 mb-2 group-hover:text-red-600 transition-colors">{item.title}</h3>
-                              <p className="text-gray-600 text-sm leading-relaxed">{item.description}</p>
-                            </div>
+                        <div key={idx} className="relative group bg-white rounded-xl border border-gray-200 p-5 hover:border-red-400 hover:shadow-lg transition-all duration-300 flex flex-col sm:flex-row gap-5 items-start">
+                          {/* Number Badge */}
+                          <div className="flex-shrink-0">
+                             <span className="flex items-center justify-center w-8 h-8 rounded-lg bg-red-100 text-red-700 font-bold text-sm ring-4 ring-white shadow-sm">
+                                {idx + 1}
+                             </span>
                           </div>
-                          {/* Item Share Button */}
+                          
+                          {/* Content */}
+                          <div className="flex-1 min-w-0 pt-0.5">
+                             <div className="pr-8">
+                                <h3 className="text-lg font-bold text-gray-900 mb-2 leading-snug group-hover:text-red-600 transition-colors">
+                                   {item.title}
+                                </h3>
+                             </div>
+                             <p className="text-sm text-gray-600 leading-relaxed whitespace-pre-line">
+                                {item.description}
+                             </p>
+                          </div>
+                          
+                          {/* Individual Share Button */}
                           <button 
                             onClick={() => handleShare(item.title, item.description)}
-                            className="absolute top-4 right-4 w-8 h-8 flex items-center justify-center text-gray-300 hover:text-red-600 hover:bg-red-50 rounded-full transition-all opacity-0 group-hover:opacity-100 focus:opacity-100"
+                            className="absolute top-4 right-4 w-8 h-8 flex items-center justify-center text-gray-300 hover:text-red-600 hover:bg-red-50 rounded-full transition-all opacity-0 group-hover:opacity-100"
                             title="分享此条"
                           >
                             <i className="fa-solid fa-share-nodes"></i>
@@ -301,8 +308,11 @@ const App: React.FC = () => {
                   )}
                   
                   {msg.sources && msg.sources.length > 0 && (
-                    <div className={`mt-6 pt-4 border-t ${msg.role === 'user' ? 'border-red-500' : 'border-gray-50'}`}>
-                      <p className={`text-xs font-bold mb-3 ${msg.role === 'user' ? 'text-red-100' : 'text-gray-400'}`}>参考来源</p>
+                    <div className={`mt-8 pt-6 border-t ${msg.role === 'user' ? 'border-red-500' : 'border-gray-50'}`}>
+                      <div className="flex items-center gap-2 mb-4">
+                        <i className={`fa-solid fa-link text-xs ${msg.role === 'user' ? 'text-red-200' : 'text-gray-400'}`}></i>
+                        <p className={`text-xs font-bold uppercase tracking-wider ${msg.role === 'user' ? 'text-red-100' : 'text-gray-400'}`}>参考来源</p>
+                      </div>
                       <div className="flex flex-wrap gap-2">
                         {msg.sources.map((s, i) => (
                           <a 
@@ -310,14 +320,14 @@ const App: React.FC = () => {
                             href={s.url} 
                             target="_blank" 
                             rel="noopener noreferrer"
-                            className={`flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg border transition-all truncate max-w-[200px] ${
+                            className={`flex items-center gap-2 text-xs px-3 py-2 rounded-lg border transition-all truncate max-w-[240px] ${
                               msg.role === 'user' 
                               ? 'bg-red-700 border-red-500 text-white hover:bg-red-800' 
-                              : 'bg-gray-50 border-gray-100 text-gray-600 hover:bg-red-50 hover:text-red-600 hover:border-red-100'
+                              : 'bg-white border-gray-200 text-gray-600 hover:bg-red-50 hover:text-red-600 hover:border-red-200 hover:shadow-sm'
                             }`}
                           >
-                            <i className={`${getSourceIcon(s.url)} text-xs opacity-80`}></i>
-                            <span className="truncate">{s.title}</span>
+                            <i className={`${getSourceIcon(s.url)} text-sm opacity-70`}></i>
+                            <span className="truncate font-medium">{s.title}</span>
                           </a>
                         ))}
                       </div>
