@@ -1,4 +1,3 @@
-
 import React, { useState, useCallback, useRef, useEffect } from 'react';
 import Logo from './components/Logo';
 import { searchGamingNews, continueDeepThinking } from './services/geminiService';
@@ -81,6 +80,7 @@ const App: React.FC = () => {
 
   const handleSearch = useCallback(async (searchQuery?: string) => {
     const q = searchQuery || query;
+    
     if (!q.trim()) return;
 
     setState(AppState.LOADING);
@@ -154,7 +154,7 @@ const App: React.FC = () => {
       </div>
       
       <div className="w-full max-w-2xl z-10">
-        {state === AppState.IDLE || (state === AppState.LOADING && history.length === 0) ? (
+        {state === AppState.IDLE || ((state === AppState.LOADING || state === AppState.ERROR) && history.length === 0) ? (
           <div className="flex flex-col items-center">
             <Logo />
             
@@ -170,20 +170,24 @@ const App: React.FC = () => {
                 <div className="absolute top-6 left-6 flex items-center pointer-events-none z-10">
                   <i className="fa-solid fa-magnifying-glass text-red-500 text-lg"></i>
                 </div>
-                <textarea
-                  ref={homeInputRef}
-                  rows={3}
-                  className="w-full pl-14 pr-14 py-6 bg-white border-2 border-red-50 rounded-2xl shadow-sm focus:border-red-400 focus:ring-0 outline-none transition-all text-gray-700 placeholder-gray-300 text-lg resize-none min-h-[120px] max-h-[300px]"
-                  placeholder='例如：“黑神话：悟空”的最新评价'
-                  value={query}
-                  onChange={(e) => setQuery(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter' && !e.shiftKey) {
-                      e.preventDefault();
-                      handleSearch();
-                    }
-                  }}
-                />
+                
+                {/* Textarea Container */}
+                <div className="relative w-full">
+                    <textarea
+                    ref={homeInputRef}
+                    rows={3}
+                    className="w-full pl-14 pr-14 py-6 bg-white border-2 border-red-50 rounded-2xl shadow-sm focus:border-red-400 focus:ring-0 outline-none transition-all text-gray-700 placeholder-gray-300 text-lg resize-none min-h-[120px] max-h-[300px]"
+                    placeholder='例如：“黑神话：悟空”的最新评价'
+                    value={query}
+                    onChange={(e) => setQuery(e.target.value)}
+                    onKeyDown={(e) => {
+                        if (e.key === 'Enter' && !e.shiftKey) {
+                        e.preventDefault();
+                        handleSearch();
+                        }
+                    }}
+                    />
+                </div>
               </div>
 
               <button
@@ -277,7 +281,7 @@ const App: React.FC = () => {
                                    {item.title}
                                 </h3>
                              </div>
-                             <p className="text-sm text-gray-600 leading-relaxed whitespace-pre-line">
+                             <p className="text-sm text-gray-600 leading-relaxed whitespace-pre-line line-clamp-4 group-hover:line-clamp-none transition-all">
                                 {item.description}
                              </p>
                           </div>
@@ -409,6 +413,13 @@ const App: React.FC = () => {
         }
         .animate-fade-in { animation: fadeIn 0.8s ease-out forwards; }
         .animate-fade-in-up { animation: fadeInUp 0.5s ease-out forwards; }
+        .scrollbar-hide::-webkit-scrollbar {
+            display: none;
+        }
+        .scrollbar-hide {
+            -ms-overflow-style: none;
+            scrollbar-width: none;
+        }
       `}</style>
     </div>
   );
