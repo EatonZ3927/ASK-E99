@@ -1,8 +1,100 @@
-
 import React, { useState, useCallback, useRef, useEffect } from 'react';
 import Logo from './components/Logo';
 import { searchGamingNews, continueDeepThinking } from './services/geminiService';
 import { AppState, SearchResult, ChatMessage, NewsItem } from './types';
+
+// Helper for generating range numbers
+const getRange = (start: number, end: number) => Array.from({ length: end - start + 1 }, (_, i) => start + i);
+const months = getRange(1, 12);
+const currentYear = new Date().getFullYear();
+const years = getRange(currentYear - 5, currentYear);
+
+const ScrollColumn: React.FC<{
+  items: number[];
+  selected: number;
+  onSelect: (val: number) => void;
+  label: string;
+}> = ({ items, selected, onSelect, label }) => {
+  const containerRef = useRef<HTMLDivElement>(null);
+  const isHovering = useRef(false);
+  const scrollTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const isFirstRender = useRef(true);
+
+  const scrollToSelected = useCallback((behavior: ScrollBehavior = 'smooth') => {
+    if (containerRef.current) {
+      const index = items.indexOf(selected);
+      if (index !== -1) {
+        containerRef.current.scrollTo({
+          top: index * 32,
+          behavior
+        });
+      }
+    }
+  }, [selected, items]);
+
+  // Center the selected item when it changes or on mount
+  useEffect(() => {
+    scrollToSelected(isFirstRender.current ? 'instant' : 'smooth');
+    isFirstRender.current = false;
+  }, [selected, scrollToSelected]);
+
+  const handleScroll = () => {
+    if (scrollTimeout.current) clearTimeout(scrollTimeout.current);
+    scrollTimeout.current = setTimeout(() => {
+      // If not interacting (hovering), snap back to selected
+      if (!isHovering.current) {
+        scrollToSelected('smooth');
+      }
+    }, 500);
+  };
+
+  const handleMouseEnter = () => { isHovering.current = true; };
+  
+  const handleMouseLeave = () => { 
+    isHovering.current = false; 
+    // Snap back immediately on leave if scroll has settled, or let scroll timeout handle it
+    scrollToSelected('smooth');
+  };
+
+  const handleTouchStart = () => { isHovering.current = true; };
+  const handleTouchEnd = () => { 
+    isHovering.current = false;
+    // For touch, momentum scroll might continue, so we rely on handleScroll timeout
+    // but we can start the timeout logic here essentially by doing nothing and letting onScroll fire
+  };
+
+  return (
+    <div 
+      className="flex flex-col h-32 relative group w-full"
+      onMouseEnter={handleMouseEnter}
+      onMouseLeave={handleMouseLeave}
+      onTouchStart={handleTouchStart}
+      onTouchEnd={handleTouchEnd}
+    >
+       <div className="text-center text-xs font-bold text-gray-400 mb-1 uppercase tracking-wider">{label}</div>
+       <div 
+          ref={containerRef}
+          onScroll={handleScroll}
+          className="flex-1 overflow-y-auto scrollbar-hide snap-y snap-mandatory bg-gray-50 rounded-lg border border-gray-100 relative"
+       >
+          <div className="absolute inset-x-0 top-1/2 -translate-y-1/2 h-8 bg-red-100/50 pointer-events-none border-y border-red-200"></div>
+          <div className="py-[36px]"> {/* Spacer to allow top/bottom scrolling */}
+            {items.map((val) => (
+              <div
+                key={val}
+                onClick={() => onSelect(val)}
+                className={`snap-center h-8 flex items-center justify-center text-sm font-medium cursor-pointer transition-colors ${
+                  val === selected ? 'text-red-600 font-bold scale-110' : 'text-gray-400 hover:text-gray-600'
+                }`}
+              >
+                {val < 10 ? `0${val}` : val}
+              </div>
+            ))}
+          </div>
+       </div>
+    </div>
+  );
+};
 
 const App: React.FC = () => {
   const [query, setQuery] = useState('');
@@ -12,15 +104,63 @@ const App: React.FC = () => {
   const [errorMsg, setErrorMsg] = useState('');
   const [toast, setToast] = useState<string | null>(null);
   
+  // Date Picker State
+  const today = new Date();
+  const [showDatePicker, setShowDatePicker] = useState(false);
+  
+  const [startYear, setStartYear] = useState(today.getFullYear());
+  const [startMonth, setStartMonth] = useState(today.getMonth() + 1);
+  const [startDay, setStartDay] = useState(today.getDate());
+  
+  const [endYear, setEndYear] = useState(today.getFullYear());
+  const [endMonth, setEndMonth] = useState(today.getMonth() + 1);
+  const [endDay, setEndDay] = useState(today.getDate());
+
   const scrollRef = useRef<HTMLDivElement>(null);
   const homeInputRef = useRef<HTMLTextAreaElement>(null);
   const followUpInputRef = useRef<HTMLTextAreaElement>(null);
+  const datePickerRef = useRef<HTMLDivElement>(null);
+
+  // Dynamic days based on year/month
+  const getDaysInMonth = (year: number, month: number) => {
+    // new Date(year, month, 0) returns the last day of the given month index 
+    // (month is 1-based from state, Date constructor takes 0-based month, 
+    // so passing `month` which is `nextMonthIndex` works for day 0)
+    return new Date(year, month, 0).getDate(); 
+  };
+
+  const startMonthDays = getRange(1, getDaysInMonth(startYear, startMonth));
+  const endMonthDays = getRange(1, getDaysInMonth(endYear, endMonth));
+
+  // Auto-correct days if month/year changes to one with fewer days
+  useEffect(() => {
+    const max = getDaysInMonth(startYear, startMonth);
+    if (startDay > max) setStartDay(max);
+  }, [startMonth, startYear]);
+
+  useEffect(() => {
+    const max = getDaysInMonth(endYear, endMonth);
+    if (endDay > max) setEndDay(max);
+  }, [endMonth, endYear]);
 
   useEffect(() => {
     if (scrollRef.current) {
       scrollRef.current.scrollIntoView({ behavior: 'smooth' });
     }
   }, [history, state]);
+
+  // Click outside to close picker
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (datePickerRef.current && !datePickerRef.current.contains(event.target as Node)) {
+        setShowDatePicker(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+    };
+  }, []);
 
   // Auto-resize textarea function
   const adjustHeight = (el: HTMLTextAreaElement | null) => {
@@ -81,14 +221,26 @@ const App: React.FC = () => {
 
   const handleSearch = useCallback(async (searchQuery?: string) => {
     const q = searchQuery || query;
-    if (!q.trim()) return;
+    const isDateModified = 
+        startYear !== today.getFullYear() || startMonth !== today.getMonth() + 1 || startDay !== today.getDate() ||
+        endYear !== today.getFullYear() || endMonth !== today.getMonth() + 1 || endDay !== today.getDate();
+
+    const hasDateRange = showDatePicker || isDateModified;
+    
+    if (!q.trim() && !hasDateRange) return;
 
     setState(AppState.LOADING);
     setQuery(q);
     setErrorMsg('');
+    setShowDatePicker(false);
+
+    let dateRangeText = undefined;
+    if (hasDateRange) {
+        dateRangeText = `${startYear}年${startMonth}月${startDay}日 到 ${endYear}年${endMonth}月${endDay}日`;
+    }
 
     try {
-      const data = await searchGamingNews(q);
+      const data = await searchGamingNews(q, dateRangeText);
       setHistory([{ role: 'model', text: data.text, items: data.items, sources: data.sources }]);
       setState(AppState.RESULT);
     } catch (err: any) {
@@ -96,7 +248,7 @@ const App: React.FC = () => {
       setErrorMsg('获取资讯失败，请重试');
       setState(AppState.ERROR);
     }
-  }, [query]);
+  }, [query, startYear, startMonth, startDay, endYear, endMonth, endDay, showDatePicker]);
 
   const handleFollowUp = useCallback(async () => {
     if (!followUpQuery.trim() || state === AppState.THINKING) return;
@@ -125,6 +277,14 @@ const App: React.FC = () => {
     setHistory([]);
     setQuery('');
     setFollowUpQuery('');
+    // Reset dates to today
+    const now = new Date();
+    setStartYear(now.getFullYear());
+    setStartMonth(now.getMonth() + 1);
+    setStartDay(now.getDate());
+    setEndYear(now.getFullYear());
+    setEndMonth(now.getMonth() + 1);
+    setEndDay(now.getDate());
   };
 
   const getSourceIcon = (url: string) => {
@@ -137,6 +297,10 @@ const App: React.FC = () => {
   };
 
   const hotSearches = ['PS5 Pro', '怪物猎人荒野', 'Switch 2 传闻'];
+
+  const isDateModified = 
+    startYear !== today.getFullYear() || startMonth !== today.getMonth() + 1 || startDay !== today.getDate() ||
+    endYear !== today.getFullYear() || endMonth !== today.getMonth() + 1 || endDay !== today.getDate();
 
   return (
     <div className="min-h-screen flex flex-col items-center p-4 relative overflow-x-hidden pt-12 md:pt-20">
@@ -170,20 +334,107 @@ const App: React.FC = () => {
                 <div className="absolute top-6 left-6 flex items-center pointer-events-none z-10">
                   <i className="fa-solid fa-magnifying-glass text-red-500 text-lg"></i>
                 </div>
-                <textarea
-                  ref={homeInputRef}
-                  rows={3}
-                  className="w-full pl-14 pr-14 py-6 bg-white border-2 border-red-50 rounded-2xl shadow-sm focus:border-red-400 focus:ring-0 outline-none transition-all text-gray-700 placeholder-gray-300 text-lg resize-none min-h-[120px] max-h-[300px]"
-                  placeholder='例如：“黑神话：悟空”的最新评价'
-                  value={query}
-                  onChange={(e) => setQuery(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter' && !e.shiftKey) {
-                      e.preventDefault();
-                      handleSearch();
-                    }
-                  }}
-                />
+                
+                {/* Textarea Container */}
+                <div className="relative w-full">
+                    <textarea
+                    ref={homeInputRef}
+                    rows={3}
+                    className="w-full pl-14 pr-14 py-6 bg-white border-2 border-red-50 rounded-2xl shadow-sm focus:border-red-400 focus:ring-0 outline-none transition-all text-gray-700 placeholder-gray-300 text-lg resize-none min-h-[120px] max-h-[300px]"
+                    placeholder='例如：“黑神话：悟空”的最新评价'
+                    value={query}
+                    onChange={(e) => setQuery(e.target.value)}
+                    onKeyDown={(e) => {
+                        if (e.key === 'Enter' && !e.shiftKey) {
+                        e.preventDefault();
+                        handleSearch();
+                        }
+                    }}
+                    />
+
+                    {/* Date Picker Toggle Button */}
+                    <button
+                        onClick={() => setShowDatePicker(!showDatePicker)}
+                        className={`absolute bottom-4 right-4 p-2 rounded-lg transition-all ${
+                            showDatePicker || isDateModified
+                            ? 'bg-red-100 text-red-600' 
+                            : 'bg-transparent text-gray-400 hover:text-red-500 hover:bg-red-50'
+                        }`}
+                        title="选择时间范围"
+                    >
+                        <i className="fa-regular fa-calendar-alt text-xl"></i>
+                        {isDateModified && (
+                            <span className="absolute -top-1 -right-1 flex h-3 w-3">
+                                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
+                                <span className="relative inline-flex rounded-full h-3 w-3 bg-red-500"></span>
+                            </span>
+                        )}
+                    </button>
+                </div>
+
+                {/* Date Picker Panel */}
+                {showDatePicker && (
+                    <div 
+                        ref={datePickerRef}
+                        className="absolute top-[105%] left-0 right-0 bg-white rounded-2xl shadow-xl border border-gray-100 p-5 z-50 animate-fade-in-up"
+                    >
+                        <div className="flex items-center justify-between mb-4 border-b border-gray-50 pb-2">
+                             <h3 className="font-bold text-gray-700 text-sm">时间穿越器</h3>
+                             <button 
+                                onClick={() => {
+                                    const now = new Date();
+                                    setStartYear(now.getFullYear());
+                                    setStartMonth(now.getMonth() + 1);
+                                    setStartDay(now.getDate());
+                                    setEndYear(now.getFullYear());
+                                    setEndMonth(now.getMonth() + 1);
+                                    setEndDay(now.getDate());
+                                }}
+                                className="text-xs text-red-500 hover:underline"
+                             >
+                                重置为今天
+                             </button>
+                        </div>
+                        <div className="flex gap-4">
+                            {/* Start Section */}
+                            <div className="flex-1 min-w-0">
+                                <div className="text-center text-xs font-bold text-red-600 bg-red-50 rounded-md py-1 mb-2">起始时间</div>
+                                <div className="flex gap-1">
+                                    <div className="w-[60px] flex-shrink-0">
+                                        <ScrollColumn items={years} selected={startYear} onSelect={setStartYear} label="年" />
+                                    </div>
+                                    <div className="flex-1">
+                                        <ScrollColumn items={months} selected={startMonth} onSelect={setStartMonth} label="月" />
+                                    </div>
+                                    <div className="flex-1">
+                                        <ScrollColumn items={startMonthDays} selected={startDay} onSelect={setStartDay} label="日" />
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            {/* Divider Arrow */}
+                            <div className="flex flex-col justify-center items-center text-gray-300 pt-6 px-1">
+                                <i className="fa-solid fa-arrow-right"></i>
+                            </div>
+
+                            {/* End Section */}
+                            <div className="flex-1 min-w-0">
+                                <div className="text-center text-xs font-bold text-gray-600 bg-gray-100 rounded-md py-1 mb-2">结束时间</div>
+                                <div className="flex gap-1">
+                                    <div className="w-[60px] flex-shrink-0">
+                                        <ScrollColumn items={years} selected={endYear} onSelect={setEndYear} label="年" />
+                                    </div>
+                                    <div className="flex-1">
+                                        <ScrollColumn items={months} selected={endMonth} onSelect={setEndMonth} label="月" />
+                                    </div>
+                                    <div className="flex-1">
+                                        <ScrollColumn items={endMonthDays} selected={endDay} onSelect={setEndDay} label="日" />
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                )}
               </div>
 
               <button
@@ -277,7 +528,7 @@ const App: React.FC = () => {
                                    {item.title}
                                 </h3>
                              </div>
-                             <p className="text-sm text-gray-600 leading-relaxed whitespace-pre-line">
+                             <p className="text-sm text-gray-600 leading-relaxed whitespace-pre-line line-clamp-4 group-hover:line-clamp-none transition-all">
                                 {item.description}
                              </p>
                           </div>
@@ -409,6 +660,13 @@ const App: React.FC = () => {
         }
         .animate-fade-in { animation: fadeIn 0.8s ease-out forwards; }
         .animate-fade-in-up { animation: fadeInUp 0.5s ease-out forwards; }
+        .scrollbar-hide::-webkit-scrollbar {
+            display: none;
+        }
+        .scrollbar-hide {
+            -ms-overflow-style: none;
+            scrollbar-width: none;
+        }
       `}</style>
     </div>
   );
