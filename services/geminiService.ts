@@ -18,10 +18,15 @@ const extractSources = (candidates: any[] | undefined): SearchSource[] => {
   return Array.from(new Map(sources.map(item => [item.url, item])).values());
 };
 
-export const searchGamingNews = async (query: string): Promise<SearchResult> => {
+export const searchGamingNews = async (query: string, dateRangeText?: string): Promise<SearchResult> => {
   const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
   const currentTime = new Date().toLocaleString();
   
+  // Determine time constraint based on user input
+  const timeInstruction = dateRangeText 
+    ? `**核心时间限制**：请严格筛选并搜索发布于 **${dateRangeText}** 期间的帖子和新闻。忽略此时间范围之外的内容。`
+    : `**核心时间限制**：仅搜索和总结 **过去 24 小时内** 发布的帖子。`;
+
   try {
     const response = await ai.models.generateContent({
       model: "gemini-3-flash-preview",
@@ -31,13 +36,15 @@ export const searchGamingNews = async (query: string): Promise<SearchResult> => 
       
       核心任务：
       1. 请 **深入挖掘** Reddit 的 r/GamingLeaksAndRumours 版块。
-      2. **严格时间限制**：仅搜索和总结 **过去 24 小时内** 发布的帖子。
+      2. ${timeInstruction}
       3. **内容提炼精华**：
-         - 提取最新的游戏爆料、谣言或泄露内容。
+         - 提取该时间段内的游戏爆料、谣言或泄露内容。
          - **必须包含评论区精华**：总结高赞评论的观点、验证信息的真伪、社区的反应（如 "False" 标记、辟谣或补充证据）。
-      4. 格式要求：将回答拆分为多个独立的资讯条目，每个条目包含标题（需吸睛）和详细描述（包含爆料内容及社区反馈）。
+      4. 格式要求：
+         - 将回答拆分为多个独立的资讯条目。
+         - 每个条目包含标题（需吸睛）和详细描述（包含爆料内容及社区反馈）。
       
-      用户关注话题（若为空则总结今日版块热门）：${query}`,
+      用户关注话题（若为空则总结该时间段内的热门）：${query}`,
       config: {
         tools: [{ googleSearch: {} }],
         temperature: 0.7,
@@ -100,7 +107,7 @@ export const continueDeepThinking = async (
     model: 'gemini-3-flash-preview',
     config: {
       systemInstruction: `你是一个 r/GamingLeaksAndRumours 的资深分析师 E99。当前时间：${currentTime}。
-      请基于用户之前的搜索结果（过去24小时内的 Reddit 爆料），对用户的新问题进行更深度的追踪分析。
+      请基于用户之前的搜索结果，对用户的新问题进行更深度的追踪分析。
       请特别关注评论区中是否有新的证据更新、Mod 标记的变化或开发者的回应。`,
       tools: [{ googleSearch: {} }],
     },
