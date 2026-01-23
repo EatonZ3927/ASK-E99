@@ -18,14 +18,12 @@ const extractSources = (candidates: any[] | undefined): SearchSource[] => {
   return Array.from(new Map(sources.map(item => [item.url, item])).values());
 };
 
-export const searchGamingNews = async (query: string, dateRangeText?: string): Promise<SearchResult> => {
+export const searchGamingNews = async (query: string): Promise<SearchResult> => {
   const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
   const currentTime = new Date().toLocaleString();
   
-  // Determine time constraint based on user input
-  const timeInstruction = dateRangeText 
-    ? `**核心时间限制**：请严格筛选并搜索发布于 **${dateRangeText}** 期间的帖子和新闻。忽略此时间范围之外的内容。`
-    : `**核心时间限制**：仅搜索和总结 **过去 24 小时内** 发布的帖子。`;
+  // Default time constraint since date picker is removed
+  const timeInstruction = `**核心时间限制**：仅搜索和总结 **过去 24 小时内** 发布的帖子。`;
 
   try {
     const response = await ai.models.generateContent({
