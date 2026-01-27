@@ -22,27 +22,46 @@ export const searchGamingNews = async (query: string): Promise<SearchResult> => 
   const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
   const currentTime = new Date().toLocaleString();
   
-  // Default time constraint since date picker is removed
-  const timeInstruction = `**核心时间限制**：仅搜索和总结 **过去 24 小时内** 发布的帖子。`;
-
   try {
     const response = await ai.models.generateContent({
       model: "gemini-3-flash-preview",
-      contents: `你是一个专注于 Reddit 社区 r/GamingLeaksAndRumours 的情报分析专家 E99。
-      
+      contents: `你是一名智能游戏资讯助手。你的任务是为用户提供经过清洗、验证且易于理解的最新情报。
+
       当前时间：${currentTime}
+
+      **核心情报源指令（最高优先级）**：
+      本次任务 **必须** 深度挖掘 **Reddit (reddit.com)** 上的讨论。
+      请重点关注 **r/GamingLeaksAndRumours**、**r/Games** 等核心板块的 **最新高热度帖子 (Hot/Top Posts)**。
+      回答的内容应主要基于 Reddit 社区的真实讨论和泄露源。
+
+      **数量要求**：
+      请尽可能搜集并整理 **10条** 最具价值的最新情报。如果情报不足，请列出所有找到的高质量情报。
+
+      **搜索与时间跨度策略（必须严格遵守）**：
       
-      核心任务：
-      1. 请 **深入挖掘** Reddit 的 r/GamingLeaksAndRumours 版块。
-      2. ${timeInstruction}
-      3. **内容提炼精华**：
-         - 提取该时间段内的游戏爆料、谣言或泄露内容。
-         - **必须包含评论区精华**：总结高赞评论的观点、验证信息的真伪、社区的反应（如 "False" 标记、辟谣或补充证据）。
-      4. 格式要求：
-         - 将回答拆分为多个独立的资讯条目。
-         - 每个条目包含标题（需吸睛）和详细描述（包含爆料内容及社区反馈）。
-      
-      用户关注话题（若为空则总结该时间段内的热门）：${query}`,
+      1. **场景一：泛一般性传闻查询**
+         - 当用户输入如“最新游戏传闻”、“今天有什么瓜”、“最新爆料”、“News”等不针对特定游戏的宽泛请求时：
+         - **时间跨度**：严格限定为 **过去 24 小时**。
+         - **搜索建议**：主动搜索 "reddit gaming leaks today", "r/GamingLeaksAndRumours new 24h" 等。
+
+      2. **场景二：特定游戏/主题查询**
+         - 当用户询问具体游戏（如“Switch 2”、“GTA 6”、“怪物猎人”）的传闻时：
+         - **时间跨度**：放宽至 **过去 3 个月**。
+         - **搜索建议**：主动搜索 "reddit [游戏名] leak rumor" 等。
+
+      **内容处理与表达优化协议**：
+      - **客观陈述**：去除所有“特工点评”、“E99看法”等主观评论。只呈现经过梳理的事实。
+      - **自适应表达**：
+        - 对于 **复杂情报**（如硬件详细参数、长篇剧情泄露、收购案细节），请进行 **详细概括**，确保用户能理解来龙去脉。
+        - 对于 **简单情报**（如单一发售日、商标注册、简单的传闻），请 **简练表达**，一针见血。
+      - **易读性**：语言风格需通俗易懂，符合中文阅读习惯，避免生硬的翻译腔。
+      - **去源头化**：虽然信息源来自 Reddit，但在正文中尽量直接陈述情报内容，不要频繁出现 "Reddit用户XXX说" 这种赘述，除非是必要的信源引用。
+
+      **输出格式**：必须返回 **JSON 数组**。
+        - title: 简练、吸睛的标题（不含Emoji）。
+        - description: 经过优化的情报内容主体。
+
+      本次任务目标（若为空则搜集今日全网最重磅的泄露）：${query}`,
       config: {
         tools: [{ googleSearch: {} }],
         temperature: 0.7,
@@ -62,13 +81,12 @@ export const searchGamingNews = async (query: string): Promise<SearchResult> => 
     });
 
     const items = JSON.parse(response.text || "[]") as NewsItem[];
+    // Fallback text if items are empty, or a summary intro
+    const text = items.length > 0 ? `已为您整理 ${items.length} 条相关情报：` : "未能检索到相关情报，请尝试其他关键词。";
     const uniqueSources = extractSources(response.candidates);
-    
-    // Create a text fallback for history context
-    const textFallback = items.map(i => `### ${i.title}\n${i.description}`).join('\n\n');
 
     return {
-      text: textFallback,
+      text: text,
       items: items,
       sources: uniqueSources
     };
@@ -86,13 +104,12 @@ export const continueDeepThinking = async (
   const currentTime = new Date().toLocaleString();
   
   // Format history for the chat API
-  // Convert structured items back to text for context if needed
   const historyForModel = history.map(msg => {
     let textContent = msg.text || "";
-    if (msg.items && msg.items.length > 0 && !textContent) {
-        textContent = msg.items.map(i => `Title: ${i.title}\nContent: ${i.description}`).join('\n\n');
+    // If message has structured items, convert to text for context
+    if (msg.items && msg.items.length > 0) {
+        textContent += "\n" + msg.items.map(i => `Title: ${i.title}\nContent: ${i.description}`).join('\n\n');
     }
-    // Ensure text is not empty
     if (!textContent.trim()) textContent = " ";
 
     return {
@@ -104,9 +121,11 @@ export const continueDeepThinking = async (
   const chat = ai.chats.create({
     model: 'gemini-3-flash-preview',
     config: {
-      systemInstruction: `你是一个 r/GamingLeaksAndRumours 的资深分析师 E99。当前时间：${currentTime}。
-      请基于用户之前的搜索结果，对用户的新问题进行更深度的追踪分析。
-      请特别关注评论区中是否有新的证据更新、Mod 标记的变化或开发者的回应。`,
+      systemInstruction: `你是一个专业的游戏行业分析助手。当前时间：${currentTime}。
+      请基于此前的行业爆料信息（主要来自 Reddit），对用户的新追问进行客观、深度的解析。
+      若需要进行额外搜索，请优先参考 Reddit 上的讨论。
+      回答请保持分段清晰，语气专业且友善。
+      不要扮演特工角色，也不要发表过于主观的个人好恶，专注于事实分析和逻辑推演。`,
       tools: [{ googleSearch: {} }],
     },
     history: historyForModel
@@ -145,7 +164,6 @@ declare global {
   }
 }
 
-// Expose functions to window for WebView usage
 if (typeof window !== 'undefined') {
   window.E99MiniProgramBridge = {
     search: async (query: string) => {
