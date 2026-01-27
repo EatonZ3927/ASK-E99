@@ -1,3 +1,4 @@
+
 import React, { useState, useCallback, useRef, useEffect } from 'react';
 import Logo from './components/Logo';
 import { searchGamingNews, continueDeepThinking } from './services/geminiService';
@@ -21,7 +22,6 @@ const App: React.FC = () => {
     }
   }, [history, state]);
 
-  // Auto-resize textarea function
   const adjustHeight = (el: HTMLTextAreaElement | null) => {
     if (el) {
       el.style.height = 'auto';
@@ -116,7 +116,7 @@ const App: React.FC = () => {
     } catch (err: any) {
       console.error(err);
       setErrorMsg('深度思考失败，请重试');
-      setState(AppState.RESULT); // Back to result to allow retry
+      setState(AppState.RESULT); 
     }
   }, [followUpQuery, history, state]);
 
@@ -138,6 +138,17 @@ const App: React.FC = () => {
 
   const hotSearches = ['PS5 Pro', '怪物猎人荒野', 'Switch 2 传闻'];
 
+  // Helper to determine bubble classes based on role and content type
+  const getBubbleClasses = (role: 'user' | 'model', isItems: boolean) => {
+    if (role === 'user') {
+      return "bg-red-600 text-white rounded-2xl rounded-tr-none shadow-md";
+    }
+    if (isItems) {
+        return "w-full"; // Items take full width of container, transparency handled in items
+    }
+    return "bg-white text-gray-800 border border-gray-100 rounded-2xl rounded-tl-none shadow-sm";
+  };
+
   return (
     <div className="min-h-screen flex flex-col items-center p-4 relative overflow-x-hidden pt-12 md:pt-20">
       {/* Toast Notification */}
@@ -148,14 +159,14 @@ const App: React.FC = () => {
         </div>
       )}
 
-      {/* Background decoration elements */}
+      {/* Background decoration */}
       <div className="fixed top-8 right-8 text-gray-100 pointer-events-none select-none">
         <i className="fa-solid fa-gamepad text-9xl transform rotate-12 opacity-10"></i>
       </div>
       
-      <div className="w-full max-w-2xl z-10">
+      <div className="w-full max-w-2xl z-10 pb-48">
         {state === AppState.IDLE || ((state === AppState.LOADING || state === AppState.ERROR) && history.length === 0) ? (
-          <div className="flex flex-col items-center">
+          <div className="flex flex-col items-center animate-fade-in-up">
             <Logo />
             
             <div className="text-center mb-10 px-4">
@@ -171,7 +182,6 @@ const App: React.FC = () => {
                   <i className="fa-solid fa-magnifying-glass text-red-500 text-lg"></i>
                 </div>
                 
-                {/* Textarea Container */}
                 <div className="relative w-full">
                     <textarea
                     ref={homeInputRef}
@@ -223,160 +233,166 @@ const App: React.FC = () => {
             </div>
           </div>
         ) : (
-          <div className="w-full space-y-6 animate-fade-in-up pb-56">
-            <div className="flex justify-center items-center mb-4 px-2">
+          <div className="w-full space-y-8 animate-fade-in-up">
+            <div className="flex justify-center items-center px-2">
                <div className="flex items-center gap-2">
-                  <span className="text-xs font-bold text-red-600 bg-red-50 px-3 py-1 rounded-full uppercase tracking-wider">Live Reddit Analysis</span>
+                  <span className="text-xs font-bold text-red-600 bg-red-50 px-3 py-1 rounded-full uppercase tracking-wider">Live Intelligence Feed</span>
                </div>
             </div>
 
             {history.map((msg, index) => (
-              <div key={index} className="flex flex-col w-full">
-                <div className={`w-full rounded-3xl p-6 shadow-sm border ${
-                  msg.role === 'user' 
-                  ? 'bg-red-600 text-white border-red-500 rounded-tr-none' 
-                  : 'bg-white text-gray-700 border-gray-100 rounded-tl-none'
-                }`}>
-                  {msg.role === 'model' && (
-                    <div className="flex items-center justify-between mb-6 pb-4 border-b border-gray-100">
-                      <div className="flex items-center gap-2 text-red-600 font-bold text-sm">
-                        <i className="fa-solid fa-robot"></i>
-                        <span>{index === 0 ? '您好，我是E99，这里是为你专属总结的游戏传闻' : 'E99 深度解析'}</span>
-                      </div>
-                      {/* Global Share Button */}
-                      {msg.items && msg.items.length > 0 && (
-                        <button 
-                          onClick={() => handleShareAll(msg.items!)}
-                          className="flex items-center gap-1.5 text-xs bg-red-50 text-red-600 px-3 py-1.5 rounded-lg font-bold hover:bg-red-100 transition-colors"
-                        >
-                          <i className="fa-solid fa-share-nodes"></i>
-                          <span>分享全篇</span>
-                        </button>
-                      )}
+              <div key={index} className={`flex w-full ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+                <div className={`
+                    relative flex flex-col gap-2 
+                    ${msg.role === 'user' ? 'items-end' : 'items-start'} 
+                    ${msg.items ? 'w-full' : 'max-w-[90%] md:max-w-[85%] w-fit'}
+                `}>
+                    {/* Role Label */}
+                    <div className={`flex items-center gap-2 px-1 mb-1 ${msg.role === 'user' ? 'text-xs font-bold opacity-70' : ''}`}>
+                        {msg.role === 'user' ? (
+                            <>
+                                <span className="text-red-600">YOU</span>
+                                <i className="fa-solid fa-user text-red-600"></i>
+                            </>
+                        ) : (
+                            <div className={`flex items-center gap-2 ${msg.items && msg.items.length > 0 ? 'text-red-600 font-bold text-sm animate-fade-in' : 'text-xs font-bold text-red-600 opacity-70'}`}>
+                                <i className="fa-solid fa-robot"></i>
+                                <span>E99</span>
+                                {msg.items && msg.items.length > 0 && (
+                                     <span className="ml-1">{msg.text}</span>
+                                )}
+                            </div>
+                        )}
                     </div>
-                  )}
-                  {msg.role === 'user' && (
-                    <div className="flex items-center gap-2 mb-3 text-red-100 font-bold text-sm">
-                      <i className="fa-solid fa-user"></i>
-                      <span>您的提问</span>
+
+                    {/* Content Bubble */}
+                    <div className={`
+                        p-5 
+                        ${getBubbleClasses(msg.role, !!msg.items)}
+                    `}>
+                        {/* Text Content - Only show here if NO items (since items moved text to label) or if it's a simple text response */}
+                        {msg.text && (!msg.items || msg.items.length === 0) && (
+                            <div className={`
+                                prose prose-sm max-w-none leading-relaxed whitespace-pre-wrap mb-1
+                                ${msg.role === 'user' ? 'text-white' : 'text-gray-800'}
+                            `}>
+                                {msg.text}
+                            </div>
+                        )}
+
+                        {/* Itemized List Display (Search Results) */}
+                        {msg.items && msg.items.length > 0 && (
+                            <div className="flex flex-col gap-4 mt-4 w-full">
+                                {msg.items.map((item, idx) => (
+                                    <div key={idx} className="bg-white rounded-xl border border-gray-100 p-5 hover:border-red-300 hover:shadow-md transition-all duration-300 flex gap-4 group">
+                                        <div className="flex-shrink-0">
+                                            <span className="flex items-center justify-center w-8 h-8 rounded-lg bg-red-50 text-red-600 font-bold text-sm">
+                                                {idx + 1}
+                                            </span>
+                                        </div>
+                                        <div className="flex-1 min-w-0">
+                                            <h3 className="text-base font-bold text-gray-900 mb-2 leading-tight group-hover:text-red-600 transition-colors">
+                                                {item.title}
+                                            </h3>
+                                            <p className="text-sm text-gray-600 leading-relaxed whitespace-pre-line">
+                                                {item.description}
+                                            </p>
+                                        </div>
+                                    </div>
+                                ))}
+                                <div className="flex justify-end mt-2">
+                                     <button 
+                                        onClick={() => handleShareAll(msg.items!)}
+                                        className="flex items-center gap-2 text-xs font-bold text-red-600 bg-red-50 hover:bg-red-100 px-4 py-2 rounded-lg transition-colors"
+                                    >
+                                        <i className="fa-solid fa-share-nodes"></i>
+                                        分享全部情报
+                                    </button>
+                                </div>
+                            </div>
+                        )}
                     </div>
-                  )}
                   
-                  {/* Content Rendering: Horizontal List Style */}
-                  {msg.items ? (
-                    <div className="flex flex-col gap-3">
-                      {msg.items.map((item, idx) => (
-                        <div key={idx} className="relative group bg-white rounded-xl border border-gray-200 p-5 hover:border-red-400 hover:shadow-lg transition-all duration-300 flex flex-col sm:flex-row gap-5 items-start">
-                          {/* Number Badge */}
-                          <div className="flex-shrink-0">
-                             <span className="flex items-center justify-center w-8 h-8 rounded-lg bg-red-100 text-red-700 font-bold text-sm ring-4 ring-white shadow-sm">
-                                {idx + 1}
-                             </span>
-                          </div>
-                          
-                          {/* Content */}
-                          <div className="flex-1 min-w-0 pt-0.5">
-                             <div className="pr-8">
-                                <h3 className="text-lg font-bold text-gray-900 mb-2 leading-snug group-hover:text-red-600 transition-colors">
-                                   {item.title}
-                                </h3>
-                             </div>
-                             <p className="text-sm text-gray-600 leading-relaxed whitespace-pre-line line-clamp-4 group-hover:line-clamp-none transition-all">
-                                {item.description}
-                             </p>
-                          </div>
-                          
-                          {/* Individual Share Button */}
-                          <button 
-                            onClick={() => handleShare(item.title, item.description)}
-                            className="absolute top-4 right-4 w-8 h-8 flex items-center justify-center text-gray-300 hover:text-red-600 hover:bg-red-50 rounded-full transition-all opacity-0 group-hover:opacity-100"
-                            title="分享此条"
-                          >
-                            <i className="fa-solid fa-share-nodes"></i>
-                          </button>
-                        </div>
-                      ))}
-                    </div>
-                  ) : (
-                    <div className="prose prose-sm max-w-none leading-relaxed whitespace-pre-wrap relative group">
-                       {msg.text}
-                       {msg.role === 'model' && (
-                         <button 
-                           onClick={() => handleShare('E99 深度解析', msg.text || '')}
-                           className="absolute top-0 right-0 w-8 h-8 flex items-center justify-center text-gray-300 hover:text-red-600 hover:bg-red-50 rounded-full transition-all opacity-0 group-hover:opacity-100"
-                         >
-                            <i className="fa-solid fa-share-nodes"></i>
-                         </button>
-                       )}
-                    </div>
-                  )}
-                  
+                  {/* Sources - Outside bubble for model */}
                   {msg.sources && msg.sources.length > 0 && (
-                    <div className={`mt-8 pt-6 border-t ${msg.role === 'user' ? 'border-red-500' : 'border-gray-50'}`}>
-                      <div className="flex items-center gap-2 mb-4">
-                        <i className={`fa-solid fa-link text-xs ${msg.role === 'user' ? 'text-red-200' : 'text-gray-400'}`}></i>
-                        <p className={`text-xs font-bold uppercase tracking-wider ${msg.role === 'user' ? 'text-red-100' : 'text-gray-400'}`}>参考来源</p>
-                      </div>
-                      <div className="flex flex-wrap gap-2">
+                    <div className={`mt-1 flex flex-wrap gap-2 ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
                         {msg.sources.map((s, i) => (
                           <a 
                             key={i} 
                             href={s.url} 
                             target="_blank" 
                             rel="noopener noreferrer"
-                            className={`flex items-center gap-2 text-xs px-3 py-2 rounded-lg border transition-all truncate max-w-[240px] ${
-                              msg.role === 'user' 
-                              ? 'bg-red-700 border-red-500 text-white hover:bg-red-800' 
-                              : 'bg-white border-gray-200 text-gray-600 hover:bg-red-50 hover:text-red-600 hover:border-red-200 hover:shadow-sm'
-                            }`}
+                            className="flex items-center gap-2 text-[10px] px-2 py-1 bg-white border border-gray-200 text-gray-500 rounded-md hover:text-red-600 hover:border-red-200 transition-colors shadow-sm max-w-[150px] truncate"
                           >
-                            <i className={`${getSourceIcon(s.url)} text-sm opacity-70`}></i>
-                            <span className="truncate font-medium">{s.title}</span>
+                            <i className={`${getSourceIcon(s.url)}`}></i>
+                            <span className="truncate">{s.title}</span>
                           </a>
                         ))}
-                      </div>
                     </div>
+                  )}
+
+                  {/* Actions for text messages */}
+                  {msg.role === 'model' && !msg.items && (
+                      <div className="flex gap-2 px-1">
+                          <button 
+                             onClick={() => handleShare('E99 深度解析', msg.text || '')}
+                             className="text-gray-400 hover:text-red-600 text-xs transition-colors"
+                             title="复制"
+                          >
+                             <i className="fa-solid fa-copy"></i>
+                          </button>
+                      </div>
                   )}
                 </div>
               </div>
             ))}
 
             {state === AppState.THINKING && (
-              <div className="flex flex-col w-full animate-pulse">
-                <div className="bg-white rounded-3xl p-6 shadow-sm border border-gray-100 rounded-tl-none flex items-center gap-4">
-                  <div className="w-8 h-8 rounded-full bg-red-50 flex items-center justify-center text-red-600">
-                    <i className="fa-solid fa-brain animate-bounce"></i>
+              <div className="flex w-full justify-start">
+                  <div className="flex flex-col gap-2 items-start max-w-[85%]">
+                    <div className="flex items-center gap-2 text-xs font-bold px-1 opacity-70">
+                         <i className="fa-solid fa-robot text-red-600"></i>
+                         <span className="text-red-600">E99</span>
+                    </div>
+                    <div className="bg-white p-5 rounded-2xl rounded-tl-none border border-gray-100 shadow-sm flex items-center gap-3">
+                        <div className="w-2 h-2 bg-red-500 rounded-full animate-bounce"></div>
+                        <div className="w-2 h-2 bg-red-500 rounded-full animate-bounce delay-75"></div>
+                        <div className="w-2 h-2 bg-red-500 rounded-full animate-bounce delay-150"></div>
+                        <span className="text-sm text-gray-400 font-medium ml-2">正在搜集情报...</span>
+                    </div>
                   </div>
-                  <span className="text-gray-400 font-medium">E99 正在深度思考中...</span>
-                </div>
               </div>
             )}
-
-            {/* Restart button aligned with the width */}
-            <div className="flex justify-center mt-12 pb-4">
-              <button 
-                onClick={reset} 
-                className="flex items-center gap-2 text-gray-400 hover:text-red-600 transition-colors font-medium bg-white px-8 py-3 rounded-full border border-gray-100 shadow-sm hover:shadow-md active:scale-95"
-              >
-                <i className="fa-solid fa-arrow-rotate-left"></i>
-                <span>重新开始 / 开启新话题</span>
-              </button>
-            </div>
-
+            
             <div ref={scrollRef} className="h-1" />
+          </div>
+        )}
 
-            {/* Bottom Input for Deep Thinking */}
-            <div className="fixed bottom-0 left-0 right-0 p-4 bg-gradient-to-t from-gray-50 via-gray-50/95 to-transparent flex justify-center z-20">
+        {/* Persistent Bottom Input (Only when chat is active) */}
+        {history.length > 0 && (
+            <div className="fixed bottom-0 left-0 right-0 p-4 bg-gradient-to-t from-[#FAFAFA] via-[#FAFAFA]/95 to-transparent flex justify-center z-20">
               <div className="w-full max-w-2xl relative">
-                <div className="bg-white rounded-2xl shadow-2xl border border-red-100 p-3 flex items-end gap-3 group transition-all focus-within:ring-2 focus-within:ring-red-100">
-                  <div className="self-start pt-4 pl-3 text-red-500 text-lg">
+                  {history.length > 0 && (
+                      <div className="flex justify-center mb-4">
+                        <button 
+                            onClick={reset} 
+                            className="flex items-center gap-2 text-xs text-gray-400 hover:text-red-600 transition-colors bg-white/50 backdrop-blur-sm px-4 py-1.5 rounded-full border border-gray-100"
+                        >
+                            <i className="fa-solid fa-arrow-rotate-left"></i>
+                            开启新话题
+                        </button>
+                      </div>
+                  )}
+
+                <div className="bg-white rounded-2xl shadow-xl border border-red-100 p-2 flex items-end gap-2 group transition-all focus-within:ring-2 focus-within:ring-red-50 focus-within:border-red-200">
+                  <div className="self-center pl-3 text-red-500">
                     <i className="fa-solid fa-lightbulb"></i>
                   </div>
                   <textarea 
                     ref={followUpInputRef}
-                    rows={3}
-                    placeholder="针对此答案进行深度追问..." 
-                    className="flex-1 py-4 bg-transparent outline-none text-gray-700 placeholder-gray-400 text-lg resize-none min-h-[100px] max-h-[300px]"
+                    rows={1}
+                    placeholder="深度追问..." 
+                    className="flex-1 py-3 bg-transparent outline-none text-gray-700 placeholder-gray-400 text-base resize-none max-h-[150px]"
                     value={followUpQuery}
                     onChange={(e) => setFollowUpQuery(e.target.value)}
                     onKeyDown={(e) => {
@@ -390,15 +406,13 @@ const App: React.FC = () => {
                   <button 
                     onClick={handleFollowUp}
                     disabled={!followUpQuery.trim() || state === AppState.THINKING}
-                    className="bg-red-600 text-white w-14 h-14 rounded-xl flex items-center justify-center hover:bg-red-700 transition-all disabled:bg-gray-200 active:scale-90 flex-shrink-0"
+                    className="bg-red-600 text-white w-10 h-10 rounded-xl flex items-center justify-center hover:bg-red-700 transition-all disabled:bg-gray-100 disabled:text-gray-300 active:scale-95 flex-shrink-0 mb-1"
                   >
-                    <i className={`fa-solid text-xl ${state === AppState.THINKING ? 'fa-spinner animate-spin' : 'fa-paper-plane'}`}></i>
+                    <i className={`fa-solid text-sm ${state === AppState.THINKING ? 'fa-spinner animate-spin' : 'fa-paper-plane'}`}></i>
                   </button>
                 </div>
-                <p className="text-[10px] text-gray-400 text-center mt-2 font-medium uppercase tracking-widest">Powered by Gemini 2.5 & Google Search</p>
               </div>
             </div>
-          </div>
         )}
       </div>
 
@@ -413,13 +427,6 @@ const App: React.FC = () => {
         }
         .animate-fade-in { animation: fadeIn 0.8s ease-out forwards; }
         .animate-fade-in-up { animation: fadeInUp 0.5s ease-out forwards; }
-        .scrollbar-hide::-webkit-scrollbar {
-            display: none;
-        }
-        .scrollbar-hide {
-            -ms-overflow-style: none;
-            scrollbar-width: none;
-        }
       `}</style>
     </div>
   );

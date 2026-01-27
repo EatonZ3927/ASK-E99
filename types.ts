@@ -27,6 +27,7 @@ export interface ChatMessage {
   text?: string;
   items?: NewsItem[];
   sources?: SearchSource[];
+  isExpanded?: boolean;
 }
 
 export enum AppState {
