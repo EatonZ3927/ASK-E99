@@ -96,6 +96,11 @@ export const searchGamingNews = async (query: string): Promise<SearchResult> => 
   }
 };
 
+interface DeepThinkResponse {
+  analysis: string;
+  points: NewsItem[];
+}
+
 export const continueDeepThinking = async (
   history: ChatMessage[], 
   newQuery: string
@@ -123,22 +128,47 @@ export const continueDeepThinking = async (
     config: {
       systemInstruction: `你是一个专业的游戏行业分析助手。当前时间：${currentTime}。
       请基于此前的行业爆料信息（主要来自 Reddit），对用户的新追问进行客观、深度的解析。
+      
+      请务必以 **JSON** 格式返回结果，包含以下两个字段：
+      1. **analysis** (string): 一段完整、深度且客观的分析文本，回答用户的问题。
+      2. **points** (array): 将你的分析拆解为若干个关键要点（title, description），就像新闻条目一样，便于用户快速阅读。如果没有特定的要点，可以为空。
+
       若需要进行额外搜索，请优先参考 Reddit 上的讨论。
-      回答请保持分段清晰，语气专业且友善。
-      不要扮演特工角色，也不要发表过于主观的个人好恶，专注于事实分析和逻辑推演。`,
+      回答请保持分段清晰，语气专业且友善。`,
       tools: [{ googleSearch: {} }],
+      responseMimeType: "application/json",
+      responseSchema: {
+        type: Type.OBJECT,
+        properties: {
+          analysis: { type: Type.STRING, description: "Detailed analysis text." },
+          points: {
+            type: Type.ARRAY,
+            items: {
+              type: Type.OBJECT,
+              properties: {
+                title: { type: Type.STRING },
+                description: { type: Type.STRING }
+              },
+              required: ["title", "description"]
+            }
+          }
+        },
+        required: ["analysis", "points"]
+      }
     },
     history: historyForModel
   });
 
   try {
     const response = await chat.sendMessage({ message: newQuery });
-    const text = response.text || "深度思考中遇到了点小问题。";
+    const jsonStr = response.text || "{}";
+    const json = JSON.parse(jsonStr) as DeepThinkResponse;
     const uniqueSources = extractSources(response.candidates);
 
     return {
       role: 'model',
-      text,
+      text: json.analysis || "深度分析完成。",
+      items: json.points || [],
       sources: uniqueSources
     };
   } catch (error) {
