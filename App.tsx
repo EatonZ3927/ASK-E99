@@ -258,7 +258,7 @@ const App: React.FC = () => {
                             <div className={`flex items-center gap-2 ${msg.items && msg.items.length > 0 ? 'text-red-600 font-bold text-sm animate-fade-in' : 'text-xs font-bold text-red-600 opacity-70'}`}>
                                 <i className="fa-solid fa-robot"></i>
                                 <span>E99</span>
-                                {msg.items && msg.items.length > 0 && (
+                                {msg.items && msg.items.length > 0 && msg.text && msg.text.length < 50 && (
                                      <span className="ml-1">{msg.text}</span>
                                 )}
                             </div>
@@ -270,17 +270,18 @@ const App: React.FC = () => {
                         p-5 
                         ${getBubbleClasses(msg.role, !!msg.items)}
                     `}>
-                        {/* Text Content - Only show here if NO items (since items moved text to label) or if it's a simple text response */}
-                        {msg.text && (!msg.items || msg.items.length === 0) && (
+                        {/* Text Content - Show if NO items OR if text is long (analysis) */}
+                        {msg.text && ((!msg.items || msg.items.length === 0) || (msg.text.length >= 50)) && (
                             <div className={`
-                                prose prose-sm max-w-none leading-relaxed whitespace-pre-wrap mb-1
+                                prose prose-sm max-w-none leading-relaxed whitespace-pre-wrap mb-4
                                 ${msg.role === 'user' ? 'text-white' : 'text-gray-800'}
+                                ${msg.items && msg.items.length > 0 ? 'bg-white p-5 rounded-xl border border-gray-100 shadow-sm' : ''}
                             `}>
                                 {msg.text}
                             </div>
                         )}
 
-                        {/* Itemized List Display (Search Results) */}
+                        {/* Itemized List Display (Search Results or Deep Think Points) */}
                         {msg.items && msg.items.length > 0 && (
                             <div className="flex flex-col gap-4 mt-4 w-full">
                                 {msg.items.map((item, idx) => (
@@ -313,21 +314,35 @@ const App: React.FC = () => {
                         )}
                     </div>
                   
-                  {/* Sources - Outside bubble for model */}
+                  {/* Sources - Summary Box */}
                   {msg.sources && msg.sources.length > 0 && (
-                    <div className={`mt-1 flex flex-wrap gap-2 ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-                        {msg.sources.map((s, i) => (
-                          <a 
-                            key={i} 
-                            href={s.url} 
-                            target="_blank" 
-                            rel="noopener noreferrer"
-                            className="flex items-center gap-2 text-[10px] px-2 py-1 bg-white border border-gray-200 text-gray-500 rounded-md hover:text-red-600 hover:border-red-200 transition-colors shadow-sm max-w-[150px] truncate"
-                          >
-                            <i className={`${getSourceIcon(s.url)}`}></i>
-                            <span className="truncate">{s.title}</span>
-                          </a>
-                        ))}
+                    <div className="mt-3 w-full bg-white rounded-xl border border-gray-200 overflow-hidden shadow-sm animate-fade-in">
+                        <div className="bg-gray-50 px-4 py-3 border-b border-gray-100 flex items-center justify-between">
+                            <span className="text-xs font-bold text-gray-500 flex items-center gap-2 uppercase tracking-wide">
+                                <i className="fa-solid fa-layer-group text-red-500"></i>
+                                情报来源汇总
+                            </span>
+                            <span className="text-[10px] font-bold bg-white text-red-600 border border-red-100 px-2 py-0.5 rounded-full">
+                                {msg.sources.length} SOURCES
+                            </span>
+                        </div>
+                        <div className="p-1 max-h-[200px] overflow-y-auto custom-scrollbar">
+                             {msg.sources.map((s, i) => (
+                                <a 
+                                    key={i} 
+                                    href={s.url} 
+                                    target="_blank" 
+                                    rel="noopener noreferrer"
+                                    className="flex items-center gap-3 p-3 hover:bg-red-50 rounded-lg group transition-all border-b border-gray-50 last:border-0"
+                                >
+                                    <div className="w-6 h-6 flex-shrink-0 flex items-center justify-center bg-gray-100 rounded-md group-hover:bg-white group-hover:text-red-500 transition-colors">
+                                         <i className={`${getSourceIcon(s.url)} text-sm text-gray-400 group-hover:text-red-500`}></i>
+                                    </div>
+                                    <span className="text-sm text-gray-600 truncate group-hover:text-red-800 font-medium flex-1">{s.title}</span>
+                                    <i className="fa-solid fa-arrow-up-right-from-square text-xs text-gray-300 group-hover:text-red-400 opacity-0 group-hover:opacity-100 transition-all transform group-hover:translate-x-1"></i>
+                                </a>
+                             ))}
+                        </div>
                     </div>
                   )}
 
@@ -373,12 +388,12 @@ const App: React.FC = () => {
             <div className="fixed bottom-0 left-0 right-0 p-4 bg-gradient-to-t from-[#FAFAFA] via-[#FAFAFA]/95 to-transparent flex justify-center z-20">
               <div className="w-full max-w-2xl relative">
                   {history.length > 0 && (
-                      <div className="flex justify-center mb-4">
+                      <div className="flex justify-center mb-6">
                         <button 
                             onClick={reset} 
-                            className="flex items-center gap-2 text-xs text-gray-400 hover:text-red-600 transition-colors bg-white/50 backdrop-blur-sm px-4 py-1.5 rounded-full border border-gray-100"
+                            className="flex items-center gap-2 text-sm font-bold text-gray-500 hover:text-red-600 transition-all bg-white shadow-lg shadow-gray-200/50 px-8 py-3 rounded-full border border-gray-100 hover:scale-105 active:scale-95 group"
                         >
-                            <i className="fa-solid fa-arrow-rotate-left"></i>
+                            <i className="fa-solid fa-arrow-rotate-left group-hover:rotate-180 transition-transform duration-500"></i>
                             开启新话题
                         </button>
                       </div>
@@ -427,6 +442,16 @@ const App: React.FC = () => {
         }
         .animate-fade-in { animation: fadeIn 0.8s ease-out forwards; }
         .animate-fade-in-up { animation: fadeInUp 0.5s ease-out forwards; }
+        .custom-scrollbar::-webkit-scrollbar {
+          width: 4px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-track {
+          background: transparent;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb {
+          background-color: #e5e7eb;
+          border-radius: 20px;
+        }
       `}</style>
     </div>
   );
