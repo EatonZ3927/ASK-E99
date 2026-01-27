@@ -1,5 +1,6 @@
 
 import React, { useState, useCallback, useRef, useEffect } from 'react';
+import html2canvas from 'html2canvas';
 import Logo from './components/Logo';
 import { searchGamingNews, continueDeepThinking } from './services/geminiService';
 import { AppState, SearchResult, ChatMessage, NewsItem } from './types';
@@ -15,6 +16,7 @@ const App: React.FC = () => {
   const scrollRef = useRef<HTMLDivElement>(null);
   const homeInputRef = useRef<HTMLTextAreaElement>(null);
   const followUpInputRef = useRef<HTMLTextAreaElement>(null);
+  const chatContainerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (scrollRef.current) {
@@ -78,6 +80,142 @@ const App: React.FC = () => {
     handleShare(title, text);
   };
 
+  const handleSaveImage = async () => {
+    if (!chatContainerRef.current) return;
+    
+    showToast('正在生成高清长图...');
+    
+    try {
+        // Wait a bit for any layout shifts
+        await new Promise(resolve => setTimeout(resolve, 200));
+
+        const canvas = await html2canvas(chatContainerRef.current, {
+            useCORS: true,
+            scale: 3, // High resolution for clarity
+            backgroundColor: '#FAFAFA', // Match app background
+            logging: false,
+            onclone: (clonedDoc) => {
+                const el = clonedDoc.querySelector('[data-chat-container]') as HTMLElement;
+                if (el) {
+                    // 1. Layout Adjustments
+                    el.style.padding = '40px 20px';
+
+                    // Remove sources container for the screenshot
+                    const sourceContainers = el.querySelectorAll('[data-sources-container]');
+                    sourceContainers.forEach(container => {
+                        (container as HTMLElement).style.display = 'none';
+                    });
+                    
+                    // 2. Contrast & Font Optimization for Screenshot
+                    // Inject a style tag to force darker text and heavier weights for better readability in image
+                    const style = clonedDoc.createElement('style');
+                    style.innerHTML = `
+                        /* Global Clarity & Opacity Reset (Fixes "White Fog") */
+                        * { 
+                            text-rendering: geometricPrecision !important; 
+                            -webkit-font-smoothing: antialiased !important; 
+                            opacity: 1 !important; /* Force full opacity */
+                        }
+                        
+                        /* Force Pure Black for main paragraphs */
+                        .prose, p { 
+                            color: #000000 !important; 
+                            font-weight: 500 !important; 
+                        }
+                        
+                        /* Force Black for Titles */
+                        h3 { 
+                            color: #000000 !important; 
+                            font-weight: 800 !important; 
+                        }
+                        
+                        /* Darken Descriptions (previously gray-600) to Dark Slate */
+                        .text-gray-600, .text-gray-700, .text-gray-800 { 
+                            color: #1a202c !important; /* gray-900 equivalent */
+                            font-weight: 600 !important;
+                        }
+                        
+                        /* Darken Metadata (previously gray-500/400) */
+                        .text-gray-500, .text-gray-400 { 
+                            color: #2d3748 !important; /* gray-800 equivalent */
+                            font-weight: 600 !important;
+                        }
+
+                        /* Ensure sources text is visible and dark */
+                        a span.text-gray-600, a {
+                            color: #1a202c !important;
+                        }
+
+                        /* Fix User Bubble Text (White on Red) */
+                        .bg-red-600, .bg-red-600 * {
+                            color: #FFFFFF !important;
+                        }
+
+                        /* Enhance Red Accents */
+                        .text-red-600 {
+                            color: #DC2626 !important; /* Vivid Red */
+                        }
+
+                        /* Fix Number Badge Alignment */
+                        [data-number-badge] {
+                            display: flex !important;
+                            align-items: center !important;
+                            justify-content: center !important;
+                            line-height: 1 !important;
+                            padding-bottom: 2px !important; /* Visually lift number up to center */
+                        }
+                    `;
+                    el.appendChild(style);
+
+                    // 3. Header Injection
+                    const header = clonedDoc.createElement('div');
+                    header.style.display = 'flex';
+                    header.style.flexDirection = 'column';
+                    header.style.alignItems = 'center';
+                    header.style.marginBottom = '30px';
+                    header.innerHTML = `
+                        <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px;">
+                            <div style="width: 32px; height: 32px; background: #FEF2F2; border-radius: 8px; display: flex; align-items: center; justify-content: center;">
+                                <svg viewBox="0 0 24 24" fill="#DC2626" style="width: 20px; height: 20px;">
+                                    <path d="M21,6H3C1.9,6,1,6.9,1,8v8c0,1.1,0.9,2,2,2h18c1.1,0,2-0.9,2-2V8C23,6.9,22.1,6,21,6z M7,13H5v2H4v-2H2v-1h2V10h1v2h2V13z M10.5,15c-0.8,0-1.5-0.7-1.5-1.5s0.7-1.5,1.5-1.5s1.5,0.7,1.5,1.5S11.3,15,10.5,15z M10.5,11c-0.8,0-1.5-0.7-1.5-1.5 s0.7-1.5,1.5-1.5S12,8.7,12,9.5S11.3,11,10.5,11z M15.5,15c-0.8,0-1.5-0.7-1.5-1.5s0.7-1.5,1.5-1.5s1.5,0.7,1.5,1.5S16.3,15,15.5,15z M18.5,13c-0.8,0-1.5-0.7-1.5-1.5s0.7-1.5,1.5-1.5s1.5,0.7,1.5,1.5S19.3,13,18.5,13z" />
+                                </svg>
+                            </div>
+                            <span style="font-size: 20px; font-weight: 800; color: #000000;">ASK <span style="color: #DC2626;">E99</span></span>
+                        </div>
+                        <div style="font-size: 12px; color: #1f2937; font-weight: 700; letter-spacing: 0.05em;">INTELLIGENCE REPORT • ${new Date().toLocaleDateString()}</div>
+                    `;
+                    el.insertBefore(header, el.firstChild);
+
+                    // 4. Footer Injection
+                    const footer = clonedDoc.createElement('div');
+                    footer.style.textAlign = 'center';
+                    footer.style.marginTop = '40px';
+                    footer.style.paddingTop = '20px';
+                    footer.style.borderTop = '2px solid #E5E7EB';
+                    footer.style.color = '#374151';
+                    footer.style.fontWeight = '700';
+                    footer.style.fontSize = '12px';
+                    footer.innerText = 'Generated by ASK E99 AI';
+                    el.appendChild(footer);
+                }
+            }
+        });
+        
+        const image = canvas.toDataURL("image/png");
+        const link = document.createElement('a');
+        link.href = image;
+        link.download = `E99-Intelligence-${new Date().toISOString().slice(0,10)}.png`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        
+        showToast('长图已保存到相册');
+    } catch (err) {
+        console.error('Screenshot failed', err);
+        showToast('生成图片失败，请重试');
+    }
+  };
+
   const handleSearch = useCallback(async (searchQuery?: string) => {
     const q = searchQuery || query;
     
@@ -89,7 +227,11 @@ const App: React.FC = () => {
 
     try {
       const data = await searchGamingNews(q);
-      setHistory([{ role: 'model', text: data.text, items: data.items, sources: data.sources }]);
+      // Include the user's query in the history so it displays on the result page
+      setHistory([
+        { role: 'user', text: q },
+        { role: 'model', text: data.text, items: data.items, sources: data.sources }
+      ]);
       setState(AppState.RESULT);
     } catch (err: any) {
       console.error(err);
@@ -233,7 +375,11 @@ const App: React.FC = () => {
             </div>
           </div>
         ) : (
-          <div className="w-full space-y-8 animate-fade-in-up">
+          <div 
+            ref={chatContainerRef} 
+            data-chat-container
+            className="w-full space-y-8 animate-fade-in-up p-2"
+          >
             <div className="flex justify-center items-center px-2">
                <div className="flex items-center gap-2">
                   <span className="text-xs font-bold text-red-600 bg-red-50 px-3 py-1 rounded-full uppercase tracking-wider">Live Intelligence Feed</span>
@@ -287,7 +433,7 @@ const App: React.FC = () => {
                                 {msg.items.map((item, idx) => (
                                     <div key={idx} className="bg-white rounded-xl border border-gray-100 p-5 hover:border-red-300 hover:shadow-md transition-all duration-300 flex gap-4 group">
                                         <div className="flex-shrink-0">
-                                            <span className="flex items-center justify-center w-8 h-8 rounded-lg bg-red-50 text-red-600 font-bold text-sm">
+                                            <span data-number-badge className="flex items-center justify-center w-8 h-8 rounded-lg bg-red-50 text-red-600 font-bold text-sm leading-none">
                                                 {idx + 1}
                                             </span>
                                         </div>
@@ -316,7 +462,7 @@ const App: React.FC = () => {
                   
                   {/* Sources - Summary Box */}
                   {msg.sources && msg.sources.length > 0 && (
-                    <div className="mt-3 w-full bg-white rounded-xl border border-gray-200 overflow-hidden shadow-sm animate-fade-in">
+                    <div data-sources-container className="mt-3 w-full bg-white rounded-xl border border-gray-200 overflow-hidden shadow-sm animate-fade-in">
                         <div className="bg-gray-50 px-4 py-3 border-b border-gray-100 flex items-center justify-between">
                             <span className="text-xs font-bold text-gray-500 flex items-center gap-2 uppercase tracking-wide">
                                 <i className="fa-solid fa-layer-group text-red-500"></i>
@@ -388,10 +534,17 @@ const App: React.FC = () => {
             <div className="fixed bottom-0 left-0 right-0 p-4 bg-gradient-to-t from-[#FAFAFA] via-[#FAFAFA]/95 to-transparent flex justify-center z-20">
               <div className="w-full max-w-2xl relative">
                   {history.length > 0 && (
-                      <div className="flex justify-center mb-6">
+                      <div className="flex justify-center mb-6 gap-3">
+                         <button 
+                            onClick={handleSaveImage} 
+                            className="flex items-center gap-2 text-sm font-bold text-gray-500 hover:text-red-600 transition-all bg-white shadow-lg shadow-gray-200/50 px-6 py-3 rounded-full border border-gray-100 hover:scale-105 active:scale-95 group"
+                        >
+                            <i className="fa-solid fa-image group-hover:text-red-500 transition-colors"></i>
+                            保存长图
+                        </button>
                         <button 
                             onClick={reset} 
-                            className="flex items-center gap-2 text-sm font-bold text-gray-500 hover:text-red-600 transition-all bg-white shadow-lg shadow-gray-200/50 px-8 py-3 rounded-full border border-gray-100 hover:scale-105 active:scale-95 group"
+                            className="flex items-center gap-2 text-sm font-bold text-gray-500 hover:text-red-600 transition-all bg-white shadow-lg shadow-gray-200/50 px-6 py-3 rounded-full border border-gray-100 hover:scale-105 active:scale-95 group"
                         >
                             <i className="fa-solid fa-arrow-rotate-left group-hover:rotate-180 transition-transform duration-500"></i>
                             开启新话题
