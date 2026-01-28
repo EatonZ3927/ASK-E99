@@ -1,4 +1,3 @@
-
 export interface GroundingChunk {
   web?: {
     uri: string;

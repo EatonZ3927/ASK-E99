@@ -6,8 +6,10 @@
  *
  * 环境变量：GEMINI_API_KEY 或 API_KEY（Gemini API Key）
  */
-
 if (process.env.GEMINI_API_KEY) process.env.API_KEY = process.env.GEMINI_API_KEY;
+if (!process.env.API_KEY) {
+  console.error('未设置 GEMINI_API_KEY 或 API_KEY，API 请求将失败。请在环境变量中配置。');
+}
 
 import express from 'express';
 import path from 'path';

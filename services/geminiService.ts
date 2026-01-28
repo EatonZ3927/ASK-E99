@@ -1,4 +1,3 @@
-
 import { GoogleGenAI, Type } from "@google/genai";
 import { SearchResult, GroundingChunk, ChatMessage, SearchSource, NewsItem } from "../types";
 
