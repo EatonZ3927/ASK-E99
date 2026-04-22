@@ -11,6 +11,7 @@ export default defineConfig(({ mode }) => {
     console.log('[Vite Config] GEMINI_API_KEY:', apiKey ? '已设置' : '未设置');
     
     return {
+      base: '/ASK-E99/',
       server: {
         port: 3001,
         host: '0.0.0.0',
