@@ -2,7 +2,7 @@
 import React, { useState, useCallback, useRef, useEffect } from 'react';
 import html2canvas from 'html2canvas';
 import Logo from './components/Logo';
-import { searchGamingNews, continueDeepThinking } from './services/geminiService';
+import { searchGamingNews, continueDeepThinking, analyzeImageAndSearchNews } from './services/geminiService';
 import { AppState, SearchResult, ChatMessage, NewsItem } from './types';
 
 const App: React.FC = () => {
@@ -12,11 +12,14 @@ const App: React.FC = () => {
   const [history, setHistory] = useState<ChatMessage[]>([]);
   const [errorMsg, setErrorMsg] = useState('');
   const [toast, setToast] = useState<string | null>(null);
-  
+  const [attachedImage, setAttachedImage] = useState<File | null>(null);
+  const [imagePreview, setImagePreview] = useState<string | null>(null);
+
   const scrollRef = useRef<HTMLDivElement>(null);
   const homeInputRef = useRef<HTMLTextAreaElement>(null);
   const followUpInputRef = useRef<HTMLTextAreaElement>(null);
   const chatContainerRef = useRef<HTMLDivElement>(null);
+  const imageInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (scrollRef.current) {
@@ -218,7 +221,29 @@ const App: React.FC = () => {
 
   const handleSearch = useCallback(async (searchQuery?: string) => {
     const q = searchQuery || query;
-    
+
+    // 如果有图片，使用图片识别功能
+    if (attachedImage) {
+      setState(AppState.LOADING);
+      setErrorMsg('');
+
+      try {
+        const data = await analyzeImageAndSearchNews(attachedImage, q);
+        setHistory([
+          { role: 'user', text: q || '识别图片中的游戏' },
+          { role: 'model', text: data.text, items: data.items, sources: data.sources }
+        ]);
+        setState(AppState.RESULT);
+        // 清除图片
+        handleRemoveImage();
+      } catch (err: any) {
+        console.error(err);
+        setErrorMsg('图片识别失败，请重试');
+        setState(AppState.ERROR);
+      }
+      return;
+    }
+
     if (!q.trim()) return;
 
     setState(AppState.LOADING);
@@ -238,7 +263,34 @@ const App: React.FC = () => {
       setErrorMsg('获取资讯失败，请重试');
       setState(AppState.ERROR);
     }
-  }, [query]);
+  }, [query, attachedImage]);
+
+  // 图片上传处理
+  const handleImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (files && files.length > 0) {
+      const file = files[0];
+      if (!file.type.startsWith('image/')) {
+        showToast('请上传图片文件');
+        return;
+      }
+      if (file.size > 10 * 1024 * 1024) {
+        showToast('图片大小不能超过10MB');
+        return;
+      }
+      setAttachedImage(file);
+      const previewUrl = URL.createObjectURL(file);
+      setImagePreview(previewUrl);
+      showToast('图片已上传，点击搜索识别游戏');
+    }
+    if (imageInputRef.current) imageInputRef.current.value = '';
+  };
+
+  const handleRemoveImage = () => {
+    if (imagePreview) URL.revokeObjectURL(imagePreview);
+    setAttachedImage(null);
+    setImagePreview(null);
+  };
 
   const handleFollowUp = useCallback(async () => {
     if (!followUpQuery.trim() || state === AppState.THINKING) return;
@@ -324,12 +376,21 @@ const App: React.FC = () => {
                   <i className="fa-solid fa-magnifying-glass text-red-500 text-lg"></i>
                 </div>
                 
+                {/* 回形针上传按钮 - 左下角 */}
+                <button
+                  onClick={() => imageInputRef.current?.click()}
+                  className="absolute bottom-4 left-5 z-10 w-7 h-7 flex items-center justify-center rounded-full transition-all hover:bg-gray-100"
+                  title="上传游戏截图识别游戏"
+                >
+                  <i className={`fa-solid fa-paperclip text-sm ${imagePreview ? 'text-green-500' : 'text-gray-400 hover:text-red-500'}`}></i>
+                </button>
+
                 <div className="relative w-full">
                     <textarea
                     ref={homeInputRef}
                     rows={3}
-                    className="w-full pl-14 pr-14 py-6 bg-white border-2 border-red-50 rounded-2xl shadow-sm focus:border-red-400 focus:ring-0 outline-none transition-all text-gray-700 placeholder-gray-300 text-lg resize-none min-h-[120px] max-h-[300px]"
-                    placeholder='例如：“黑神话：悟空”的最新评价'
+                    className="w-full pl-14 pr-4 pt-5 bg-white border-2 border-red-50 rounded-2xl shadow-sm focus:border-red-400 focus:ring-0 outline-none transition-all text-gray-700 placeholder-gray-300 text-lg resize-none min-h-[120px] max-h-[300px]"
+                    placeholder='例如："黑神话：悟空"的最新评价'
                     value={query}
                     onChange={(e) => setQuery(e.target.value)}
                     onKeyDown={(e) => {
@@ -339,8 +400,32 @@ const App: React.FC = () => {
                         }
                     }}
                     />
+                    
+                    {/* 图片文件名显示在输入框底部 */}
+                    {attachedImage && (
+                      <div className="absolute bottom-3 left-14 flex items-center gap-1.5 bg-green-50 px-3 py-1.5 rounded-lg border border-green-200 max-w-[calc(100%-60px)]">
+                        <i className="fa-solid fa-image text-green-500 text-xs flex-shrink-0"></i>
+                        <span className="text-xs text-green-700 font-medium truncate">{attachedImage.name}</span>
+                        <button
+                          onClick={handleRemoveImage}
+                          className="text-gray-400 hover:text-red-500 transition-colors flex-shrink-0"
+                          title="移除图片"
+                        >
+                          <i className="fa-solid fa-times-circle text-sm"></i>
+                        </button>
+                      </div>
+                    )}
                 </div>
               </div>
+
+              {/* 图片上传功能 */}
+              <input
+                type="file"
+                ref={imageInputRef}
+                accept="image/*"
+                onChange={handleImageSelect}
+                className="hidden"
+              />
 
               <button
                 onClick={() => handleSearch()}

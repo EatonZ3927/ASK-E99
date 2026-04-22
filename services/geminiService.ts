@@ -1,13 +1,14 @@
-
-import { GoogleGenAI, Type } from "@google/genai";
+import { GoogleGenAI } from "@google/genai";
 import { SearchResult, GroundingChunk, ChatMessage, SearchSource, NewsItem } from "../types";
+
+const API_KEY = 'AIzaSyCyTfLKnB1N_qD7VTvpQmKnt0qcOjBux-w';
 
 const extractSources = (candidates: any[] | undefined): SearchSource[] => {
   const rawChunks = candidates?.[0]?.groundingMetadata?.groundingChunks || [];
   const chunks = rawChunks as GroundingChunk[];
-  
+
   const sources = chunks
-    .filter((chunk): chunk is { web: { title: string; uri: string } } => 
+    .filter((chunk): chunk is { web: { title: string; uri: string } } =>
       Boolean(chunk.web && chunk.web.title && chunk.web.uri)
     )
     .map(chunk => ({
@@ -18,71 +19,158 @@ const extractSources = (candidates: any[] | undefined): SearchSource[] => {
   return Array.from(new Map(sources.map(item => [item.url, item])).values());
 };
 
-export const searchGamingNews = async (query: string): Promise<SearchResult> => {
-  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-  const currentTime = new Date().toLocaleString();
+// 文件转Base64
+const fileToBase64 = async (file: File): Promise<string> => {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      const result = reader.result as string;
+      // 移除 data:image/xxx;base64, 前缀
+      const base64 = result.split(',')[1];
+      resolve(base64);
+    };
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+};
+
+// 识别图片中的游戏
+export const identifyGameFromImage = async (imageFile: File): Promise<{ gameName: string; description: string }> => {
+  console.log('[DEBUG] identifyGameFromImage 开始');
+  
+  const ai = new GoogleGenAI({ apiKey: API_KEY });
+  const currentTime = new Date().toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai' });
+  
+  // 获取文件类型
+  const mimeType = imageFile.type || 'image/jpeg';
+  const base64Image = await fileToBase64(imageFile);
   
   try {
+    console.log('[DEBUG] 调用 Gemini Vision API...');
+    
     const response = await ai.models.generateContent({
-      model: "gemini-3-flash-preview",
-      contents: `你是一名智能游戏资讯助手。你的任务是为用户提供经过清洗、验证且易于理解的最新情报。
-
-      当前时间：${currentTime}
-
-      **核心情报源指令（最高优先级）**：
-      本次任务 **必须** 深度挖掘 **Reddit (reddit.com)** 上的讨论。
-      请重点关注 **r/GamingLeaksAndRumours**、**r/Games** 等核心板块的 **最新高热度帖子 (Hot/Top Posts)**。
-      回答的内容应主要基于 Reddit 社区的真实讨论和泄露源。
-
-      **数量要求**：
-      请尽可能搜集并整理 **10条** 最具价值的最新情报。如果情报不足，请列出所有找到的高质量情报。
-
-      **搜索与时间跨度策略（必须严格遵守）**：
-      
-      1. **场景一：泛一般性传闻查询**
-         - 当用户输入如“最新游戏传闻”、“今天有什么瓜”、“最新爆料”、“News”等不针对特定游戏的宽泛请求时：
-         - **时间跨度**：严格限定为 **过去 24 小时**。
-         - **搜索建议**：主动搜索 "reddit gaming leaks today", "r/GamingLeaksAndRumours new 24h" 等。
-
-      2. **场景二：特定游戏/主题查询**
-         - 当用户询问具体游戏（如“Switch 2”、“GTA 6”、“怪物猎人”）的传闻时：
-         - **时间跨度**：放宽至 **过去 3 个月**。
-         - **搜索建议**：主动搜索 "reddit [游戏名] leak rumor" 等。
-
-      **内容处理与表达优化协议**：
-      - **客观陈述**：去除所有“特工点评”、“E99看法”等主观评论。只呈现经过梳理的事实。
-      - **自适应表达**：
-        - 对于 **复杂情报**（如硬件详细参数、长篇剧情泄露、收购案细节），请进行 **详细概括**，确保用户能理解来龙去脉。
-        - 对于 **简单情报**（如单一发售日、商标注册、简单的传闻），请 **简练表达**，一针见血。
-      - **易读性**：语言风格需通俗易懂，符合中文阅读习惯，避免生硬的翻译腔。
-      - **去源头化**：虽然信息源来自 Reddit，但在正文中尽量直接陈述情报内容，不要频繁出现 "Reddit用户XXX说" 这种赘述，除非是必要的信源引用。
-
-      **输出格式**：必须返回 **JSON 数组**。
-        - title: 简练、吸睛的标题（不含Emoji）。
-        - description: 经过优化的情报内容主体。
-
-      本次任务目标（若为空则搜集今日全网最重磅的泄露）：${query}`,
-      config: {
-        tools: [{ googleSearch: {} }],
-        temperature: 0.7,
-        responseMimeType: "application/json",
-        responseSchema: {
-          type: Type.ARRAY,
-          items: {
-            type: Type.OBJECT,
-            properties: {
-              title: { type: Type.STRING },
-              description: { type: Type.STRING }
+      model: "gemini-2.5-flash",
+      contents: [
+        {
+          parts: [
+            {
+              inlineData: {
+                mimeType: mimeType,
+                data: base64Image
+              }
             },
-            required: ["title", "description"]
-          }
+            {
+              text: `请仔细分析这张图片，识别这是哪个游戏的截图或画面。
+
+当前时间：${currentTime}
+
+请从以下方面进行分析：
+1. 游戏名称（如果能确定具体游戏）
+2. 游戏类型（动作、RPG、射击、策略等）
+3. 画面特征（UI元素、角色、场景、风格等）
+4. 如果无法确定具体游戏，请给出最可能的几个候选游戏
+
+请以JSON格式返回：
+{
+  "gameName": "游戏名称（如果确定）或"未知游戏"",
+  "description": "详细描述图片内容和你识别依据"
+}`
+            }
+          ]
         }
+      ],
+      config: {
+        temperature: 0.3,
       },
     });
 
-    const items = JSON.parse(response.text || "[]") as NewsItem[];
-    // Fallback text if items are empty, or a summary intro
-    const text = items.length > 0 ? `已为您整理 ${items.length} 条相关情报：` : "未能检索到相关情报，请尝试其他关键词。";
+    console.log('[DEBUG] Vision API 响应:', response.text);
+    
+    // 解析响应
+    let result = { gameName: '未知游戏', description: '' };
+    try {
+      const jsonMatch = response.text?.match(/\{[\s\S]*\}/);
+      if (jsonMatch) {
+        result = JSON.parse(jsonMatch[0]);
+      } else {
+        result.description = response.text || '无法识别图片内容';
+      }
+    } catch (parseError) {
+      console.error('[DEBUG] JSON 解析失败:', parseError);
+      result.description = response.text || '无法识别图片内容';
+    }
+
+    return result;
+  } catch (error: any) {
+    console.error("[DEBUG] Vision API 错误:", error);
+    throw new Error(`图片识别失败: ${error?.message || '未知错误'}`);
+  }
+};
+
+// 根据识别的游戏搜索最新资讯
+export const searchGameNewsByIdentifiedGame = async (gameName: string): Promise<SearchResult> => {
+  console.log('[DEBUG] searchGameNewsByIdentifiedGame 开始, gameName:', gameName);
+  
+  const ai = new GoogleGenAI({ apiKey: API_KEY });
+  const currentTime = new Date().toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai' });
+  const today = new Date().toISOString().split('T')[0]; // YYYY-MM-DD格式
+  
+  // 计算时间范围
+  const oneWeekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+  const oneMonthAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+
+  try {
+    console.log('[DEBUG] 搜索游戏资讯...');
+    
+    const response = await ai.models.generateContent({
+      model: "gemini-2.5-flash",
+      contents: `你是一名专业游戏资讯助手。用户上传了一张"${gameName}"的游戏截图，请搜索该游戏的最新动态和资讯。
+
+**严格时间要求**：
+- 当前日期：${today}
+- 搜索范围：${oneWeekAgo} 至 ${today}（最近一周内的资讯优先）
+- 如果一周内资讯不足，可扩展至 ${oneMonthAgo} 至 ${today}（最近一个月）
+- 每条资讯必须标注具体日期，拒绝返回超过一个月的旧资讯
+
+**搜索重点**：
+1. 游戏更新、补丁、版本变动
+2. 新内容发布（DLC、活动、赛季等）
+3. 社区热点讨论
+4. 官方公告和新闻
+5. 玩家评价和反馈
+
+请返回5-10条最新资讯，每条包含标题和描述（描述中包含日期信息）。JSON格式：
+[{"title": "标题", "description": "描述（含日期）"}]`,
+      config: {
+        tools: [{ googleSearch: {} }],
+        temperature: 0.5,
+      },
+    });
+
+    console.log('[DEBUG] 搜索响应:', response.text);
+    
+    // 解析响应
+    let items: NewsItem[] = [];
+    let responseText = response.text || '';
+    
+    try {
+      const jsonMatch = responseText.match(/\[[\s\S]*\]/);
+      if (jsonMatch) {
+        items = JSON.parse(jsonMatch[0]) as NewsItem[];
+      } else if (responseText.trim()) {
+        items = [{ title: `"${gameName}"相关资讯`, description: responseText }];
+      }
+    } catch (parseError) {
+      console.error('[DEBUG] JSON 解析失败:', parseError);
+      if (responseText.trim()) {
+        items = [{ title: `"${gameName}"相关资讯`, description: responseText }];
+      }
+    }
+
+    const text = items.length > 0 
+      ? `已识别游戏：**${gameName}**，为您整理 ${items.length} 条最新动态：` 
+      : `已识别游戏：**${gameName}**，但未找到近期相关资讯。`;
+    
     const uniqueSources = extractSources(response.candidates);
 
     return {
@@ -90,9 +178,100 @@ export const searchGamingNews = async (query: string): Promise<SearchResult> => 
       items: items,
       sources: uniqueSources
     };
-  } catch (error) {
-    console.error("Gemini Search Error:", error);
-    throw error;
+  } catch (error: any) {
+    console.error("[DEBUG] 搜索错误:", error);
+    throw new Error(`资讯搜索失败: ${error?.message || '未知错误'}`);
+  }
+};
+
+// 组合功能：识别图片并搜索资讯
+export const analyzeImageAndSearchNews = async (imageFile: File): Promise<SearchResult> => {
+  console.log('[DEBUG] analyzeImageAndSearchNews 开始');
+
+  // 第一步：识别游戏
+  const identification = await identifyGameFromImage(imageFile);
+  console.log('[DEBUG] 识别结果:', identification);
+
+  // 如果识别失败或不确定
+  if (!identification.gameName || identification.gameName === '未知游戏') {
+    return {
+      text: `无法确定具体游戏。\n\n${identification.description}`,
+      items: [],
+      sources: []
+    };
+  }
+
+  // 第二步：搜索该游戏的最新资讯
+  const searchResult = await searchGameNewsByIdentifiedGame(identification.gameName);
+
+  // 精简的识别说明
+  return {
+    ...searchResult,
+    text: searchResult.text
+  };
+};
+
+export const searchGamingNews = async (query: string): Promise<SearchResult> => {
+  console.log('[DEBUG] searchGamingNews 开始, query:', query);
+  
+  const ai = new GoogleGenAI({ apiKey: API_KEY });
+  const currentTime = new Date().toLocaleString();
+
+  try {
+    console.log('[DEBUG] 调用 Gemini API...');
+    
+    const response = await ai.models.generateContent({
+      model: "gemini-2.5-flash",
+      contents: `你是一名智能游戏资讯助手。请搜索关于"${query}"的最新游戏资讯。
+
+当前时间：${currentTime}
+
+请搜索相关新闻并返回5-10条资讯，每条包含标题和描述。以JSON数组格式返回：
+[{"title": "标题", "description": "描述"}]`,
+      config: {
+        tools: [{ googleSearch: {} }],
+        temperature: 0.7,
+      },
+    });
+
+    console.log('[DEBUG] API 响应成功');
+    console.log('[DEBUG] response.text:', response.text);
+    
+    // 解析响应
+    let items: NewsItem[] = [];
+    let responseText = response.text || '';
+    
+    try {
+      const jsonMatch = responseText.match(/\[[\s\S]*\]/);
+      if (jsonMatch) {
+        items = JSON.parse(jsonMatch[0]) as NewsItem[];
+      } else if (responseText.trim()) {
+        items = [{ title: `关于"${query}"的资讯`, description: responseText }];
+      }
+    } catch (parseError) {
+      console.error('[DEBUG] JSON 解析失败:', parseError);
+      if (responseText.trim()) {
+        items = [{ title: `关于"${query}"的资讯`, description: responseText }];
+      }
+    }
+
+    const text = items.length > 0 
+      ? `已为您整理 ${items.length} 条相关情报：` 
+      : "未能检索到相关情报，请尝试其他关键词。";
+    
+    const uniqueSources = extractSources(response.candidates);
+    console.log('[DEBUG] 提取的来源数量:', uniqueSources.length);
+
+    return {
+      text: text,
+      items: items,
+      sources: uniqueSources
+    };
+  } catch (error: any) {
+    console.error("[DEBUG] Gemini API 错误:", error);
+    console.error("[DEBUG] 错误消息:", error?.message);
+    console.error("[DEBUG] 错误详情:", JSON.stringify(error, null, 2));
+    throw new Error(`API 调用失败: ${error?.message || '未知错误'}`);
   }
 };
 
@@ -102,78 +281,42 @@ interface DeepThinkResponse {
 }
 
 export const continueDeepThinking = async (
-  history: ChatMessage[], 
+  history: ChatMessage[],
   newQuery: string
 ): Promise<ChatMessage> => {
-  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-  const currentTime = new Date().toLocaleString();
+  console.log('[DEBUG] continueDeepThinking 开始');
   
-  // Format history for the chat API
+  const ai = new GoogleGenAI({ apiKey: API_KEY });
+
   const historyForModel = history.map(msg => {
     let textContent = msg.text || "";
-    // If message has structured items, convert to text for context
     if (msg.items && msg.items.length > 0) {
-        textContent += "\n" + msg.items.map(i => `Title: ${i.title}\nContent: ${i.description}`).join('\n\n');
+      textContent += "\n" + msg.items.map(i => `Title: ${i.title}\nContent: ${i.description}`).join('\n\n');
     }
     if (!textContent.trim()) textContent = " ";
-
-    return {
-      role: msg.role,
-      parts: [{ text: textContent }]
-    };
-  });
-
-  const chat = ai.chats.create({
-    model: 'gemini-3-flash-preview',
-    config: {
-      systemInstruction: `你是一个专业的游戏行业分析助手。当前时间：${currentTime}。
-      请基于此前的行业爆料信息（主要来自 Reddit），对用户的新追问进行客观、深度的解析。
-      
-      请务必以 **JSON** 格式返回结果，包含以下两个字段：
-      1. **analysis** (string): 一段完整、深度且客观的分析文本，回答用户的问题。
-      2. **points** (array): 将你的分析拆解为若干个关键要点（title, description），就像新闻条目一样，便于用户快速阅读。如果没有特定的要点，可以为空。
-
-      若需要进行额外搜索，请优先参考 Reddit 上的讨论。
-      回答请保持分段清晰，语气专业且友善。`,
-      tools: [{ googleSearch: {} }],
-      responseMimeType: "application/json",
-      responseSchema: {
-        type: Type.OBJECT,
-        properties: {
-          analysis: { type: Type.STRING, description: "Detailed analysis text." },
-          points: {
-            type: Type.ARRAY,
-            items: {
-              type: Type.OBJECT,
-              properties: {
-                title: { type: Type.STRING },
-                description: { type: Type.STRING }
-              },
-              required: ["title", "description"]
-            }
-          }
-        },
-        required: ["analysis", "points"]
-      }
-    },
-    history: historyForModel
+    return { role: msg.role, parts: [{ text: textContent }] };
   });
 
   try {
-    const response = await chat.sendMessage({ message: newQuery });
-    const jsonStr = response.text || "{}";
-    const json = JSON.parse(jsonStr) as DeepThinkResponse;
-    const uniqueSources = extractSources(response.candidates);
+    const chat = ai.chats.create({
+      model: 'gemini-2.5-flash',
+      config: {
+        tools: [{ googleSearch: {} }],
+      },
+      history: historyForModel
+    });
 
+    const response = await chat.sendMessage({ message: newQuery });
+    
     return {
       role: 'model',
-      text: json.analysis || "深度分析完成。",
-      items: json.points || [],
-      sources: uniqueSources
+      text: response.text || "深度分析完成。",
+      items: [],
+      sources: extractSources(response.candidates)
     };
-  } catch (error) {
-    console.error("Deep Thinking Error:", error);
-    throw error;
+  } catch (error: any) {
+    console.error("[DEBUG] Deep Thinking 错误:", error);
+    throw new Error(`深度思考失败: ${error?.message || '未知错误'}`);
   }
 };
 
@@ -213,5 +356,5 @@ if (typeof window !== 'undefined') {
       }
     }
   };
-  console.log('[E99 Bridge] Ready. Accessible via window.E99MiniProgramBridge');
+  console.log('[E99 Bridge] Ready');
 }
