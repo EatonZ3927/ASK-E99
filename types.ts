@@ -1,11 +1,4 @@
 
-export interface GroundingChunk {
-  web?: {
-    uri: string;
-    title: string;
-  };
-}
-
 export interface SearchSource {
   title: string;
   url: string;

@@ -2,7 +2,7 @@
 import React, { useState, useCallback, useRef, useEffect } from 'react';
 import html2canvas from 'html2canvas';
 import Logo from './components/Logo';
-import { searchGamingNews, continueDeepThinking, analyzeImageAndSearchNews } from './services/geminiService';
+import { searchGamingNews, continueDeepThinking, analyzeImageAndSearchNews } from './services/dashscopeService';
 import { AppState, SearchResult, ChatMessage, NewsItem } from './types';
 
 const App: React.FC = () => {
